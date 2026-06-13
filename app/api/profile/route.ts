@@ -10,7 +10,7 @@ export async function GET() {
   if (!founder) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { data, error } = await supabase
-    .from("profiles")
+    .from("founder_profiles")
     .select("*")
     .eq("user_id", founder.user_id)
     .maybeSingle();
@@ -58,7 +58,7 @@ export async function PATCH(req: Request) {
   }
 
   const { data, error } = await supabase
-    .from("profiles")
+    .from("founder_profiles")
     .update(update)
     .eq("user_id", founder.user_id)
     .select()

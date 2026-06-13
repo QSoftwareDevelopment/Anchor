@@ -31,7 +31,7 @@ export async function POST() {
 
   const [{ data: profile }, { data: tokenRow }, { data: tasks }, { data: todayBlocks }] =
     await Promise.all([
-      supabase.from("profiles").select("*").eq("user_id", founder.user_id).maybeSingle(),
+      supabase.from("founder_profiles").select("*").eq("user_id", founder.user_id).maybeSingle(),
       // gcal_tokens RLS is self-only — the session client can read its own row
       supabase
         .from("gcal_tokens")

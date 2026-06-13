@@ -89,13 +89,13 @@ export async function GET(req: Request) {
 
   const { data: founders, error: fErr } = await supabase
     .from("founders")
-    .select("user_id, display_name, profiles(*), gcal_tokens(*)");
+    .select("user_id, display_name, founder_profiles(*), gcal_tokens(*)");
   if (fErr) return NextResponse.json({ error: fErr.message }, { status: 500 });
 
   const results: Record<string, unknown> = {};
 
   for (const f of founders ?? []) {
-    const profile = Array.isArray(f.profiles) ? f.profiles[0] : f.profiles;
+    const profile = Array.isArray(f.founder_profiles) ? f.founder_profiles[0] : f.founder_profiles;
     const tokens = Array.isArray(f.gcal_tokens) ? f.gcal_tokens[0] : f.gcal_tokens;
     if (!profile) continue;
 
@@ -116,7 +116,7 @@ export async function GET(req: Request) {
     );
     if (JSON.stringify(learned) !== JSON.stringify(profile.multipliers)) {
       await supabase
-        .from("profiles")
+        .from("founder_profiles")
         .update({ multipliers: learned })
         .eq("user_id", f.user_id);
       profile.multipliers = learned;

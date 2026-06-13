@@ -21,8 +21,10 @@ create table founders (
   created_at   timestamptz not null default now()
 );
 
--- ---------- PROFILES (energy + capacity, one row per founder) ----------
-create table profiles (
+-- ---------- FOUNDER_PROFILES (energy + capacity, one row per founder) ----------
+-- Named founder_profiles (not "profiles") so it never collides with a
+-- "profiles" table from another app sharing the same Supabase project.
+create table founder_profiles (
   user_id        uuid primary key references founders(user_id) on delete cascade,
   -- High-energy windows, e.g. [{"days":["mon","tue","wed","thu","fri"],"start":"09:00","end":"12:00"}]
   energy_windows jsonb not null default '[]',
@@ -176,7 +178,7 @@ $$ language plpgsql;
 create trigger goals_touch    before update on goals    for each row execute function set_updated_at();
 create trigger projects_touch before update on projects for each row execute function set_updated_at();
 create trigger tasks_touch    before update on tasks    for each row execute function set_updated_at();
-create trigger profiles_touch before update on profiles for each row execute function set_updated_at();
+create trigger founder_profiles_touch before update on founder_profiles for each row execute function set_updated_at();
 
 -- Auto-increment slip_count when a task's week moves without completion
 create or replace function track_slip() returns trigger as $$
@@ -203,7 +205,7 @@ create or replace function is_founder() returns boolean as $$
 $$ language sql security definer stable;
 
 alter table founders           enable row level security;
-alter table profiles           enable row level security;
+alter table founder_profiles   enable row level security;
 alter table goals              enable row level security;
 alter table indicators         enable row level security;
 alter table indicator_entries  enable row level security;
@@ -217,7 +219,7 @@ alter table anchor_commitments enable row level security;
 -- founders: readable by founders; managed via service role only (no insert policy on purpose)
 create policy founders_read on founders for select using (is_founder());
 
-create policy profiles_all   on profiles           for all using (is_founder()) with check (is_founder());
+create policy founder_profiles_all on founder_profiles for all using (is_founder()) with check (is_founder());
 create policy goals_all      on goals              for all using (is_founder()) with check (is_founder());
 create policy indicators_all on indicators         for all using (is_founder()) with check (is_founder());
 create policy ind_entries_all on indicator_entries for all using (is_founder()) with check (is_founder());

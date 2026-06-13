@@ -71,7 +71,7 @@ export async function POST(req: Request) {
   // 3. anchor commitments
   const { data: founders } = await supabase
     .from("founders")
-    .select("user_id, display_name, profiles(*), gcal_tokens(*)");
+    .select("user_id, display_name, founder_profiles(*), gcal_tokens(*)");
   const sid = (founders ?? []).find((f) => f.display_name.toLowerCase() === "sid");
   const aaryan = (founders ?? []).find((f) => f.display_name.toLowerCase() === "aaryan");
 
@@ -110,7 +110,7 @@ export async function POST(req: Request) {
   const scheduleResults: Record<string, { placed: number; unplaced: number }> = {};
 
   for (const f of founders ?? []) {
-    const profile = Array.isArray(f.profiles) ? f.profiles[0] : f.profiles;
+    const profile = Array.isArray(f.founder_profiles) ? f.founder_profiles[0] : f.founder_profiles;
     if (!profile) continue;
     const { data: tokenRow } = await service
       .from("gcal_tokens")

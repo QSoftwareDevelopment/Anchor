@@ -38,7 +38,7 @@ export async function GET(req: Request) {
 
   const [{ data: founders }, { data: weekly }, { data: anchors }] =
     await Promise.all([
-      supabase.from("founders").select("user_id, display_name, profiles(*)"),
+      supabase.from("founders").select("user_id, display_name, founder_profiles(*)"),
       supabase
         .from("reviews")
         .select("one_metric")
@@ -81,7 +81,7 @@ export async function GET(req: Request) {
     if (partnerAnchor) sentences.push(`Partner's anchor: ${partnerAnchor.commitment}`);
 
     const brief = sentences.join(" ");
-    const profile = Array.isArray(f.profiles) ? f.profiles[0] : f.profiles;
+    const profile = Array.isArray(f.founder_profiles) ? f.founder_profiles[0] : f.founder_profiles;
     const phone = (profile as { phone?: string } | null)?.phone;
 
     let delivered = false;

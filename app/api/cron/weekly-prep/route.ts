@@ -38,7 +38,7 @@ export async function GET(req: Request) {
     { data: anchors },
     { data: lastWeekly },
   ] = await Promise.all([
-    supabase.from("founders").select("user_id, display_name, profiles(*)"),
+    supabase.from("founders").select("user_id, display_name, founder_profiles(*)"),
     supabase
       .from("goals")
       .select("*, indicators(*, indicator_entries(week_start, actual))")
@@ -152,7 +152,7 @@ export async function GET(req: Request) {
     const plannerInput = {
       week_start: nextMonday,
       founders: (founders ?? []).map((f) => {
-        const profile = Array.isArray(f.profiles) ? f.profiles[0] : f.profiles;
+        const profile = Array.isArray(f.founder_profiles) ? f.founder_profiles[0] : f.founder_profiles;
         return {
           id: f.user_id,
           name: f.display_name,

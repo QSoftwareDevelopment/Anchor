@@ -64,7 +64,7 @@ export default async function InsightsPage() {
         .eq("status", "done")
         .gte("completed_at", `${windowStart}T00:00:00`),
       supabase.from("founders").select("user_id, display_name"),
-      supabase.from("profiles").select("user_id, multipliers"),
+      supabase.from("founder_profiles").select("user_id, multipliers"),
       supabase
         .from("indicators")
         .select("id, name, weekly_target, indicator_entries(week_start, actual)"),

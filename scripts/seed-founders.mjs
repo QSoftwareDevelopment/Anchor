@@ -118,7 +118,7 @@ async function run() {
       .upsert({ user_id: user.id, display_name: f.name }, { onConflict: "user_id" });
     if (fErr) throw new Error(`founders upsert for ${f.email}: ${fErr.message}`);
 
-    const { error: pErr } = await admin.from("profiles").upsert(
+    const { error: pErr } = await admin.from("founder_profiles").upsert(
       {
         user_id: user.id,
         energy_windows: f.energy_windows,
@@ -128,7 +128,7 @@ async function run() {
       },
       { onConflict: "user_id" }
     );
-    if (pErr) throw new Error(`profiles upsert for ${f.email}: ${pErr.message}`);
+    if (pErr) throw new Error(`founder_profiles upsert for ${f.email}: ${pErr.message}`);
 
     results.push({ name: f.name, email: f.email, id: user.id, created });
     console.log(`  ${created ? "✓ created" : "• already existed"}  ${f.name.padEnd(7)} ${f.email}`);
