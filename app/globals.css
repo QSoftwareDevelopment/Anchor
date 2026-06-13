@@ -1,0 +1,201 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   DESIGN TOKENS
+   One accent, near-black text, calm greys. Tokens drive both the
+   Tailwind utilities (see tailwind.config.ts) and the component
+   classes below, so the whole app stays one coherent surface.
+   ============================================================ */
+:root {
+  --qa-bg:           #fafafa;
+  --qa-surface:      #f4f4f6;
+  --qa-surface-2:    #ebebed;
+  --qa-text:         #16181d;
+  --qa-text-2:       #6b7280;
+  --qa-line:         #e7e7ea;
+  --qa-line-strong:  #c9c9cf;
+  --qa-accent:       #4f46e5;
+  --qa-accent-text:  #ffffff;
+  --qa-accent-soft:  #eef0ff;   /* tint for the hero / selected states */
+  --qa-accent-ring:  rgba(79, 70, 229, 0.32);
+  --qa-success:      #16a34a;
+  --qa-success-soft: #e9f7ee;
+  --qa-warn:         #b45309;
+  --qa-font:         'Inter', ui-sans-serif, system-ui;
+  --qa-mono:         ui-monospace, 'SF Mono', monospace;
+  --qa-radius:       12px;
+  --qa-radius-sm:    8px;
+
+  /* elevation — soft, never heavy. Depth reads as importance. */
+  --qa-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 1px rgba(16, 24, 40, 0.03);
+  --qa-shadow:    0 2px 8px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --qa-shadow-lg: 0 12px 32px rgba(16, 24, 40, 0.12), 0 4px 8px rgba(16, 24, 40, 0.05);
+
+  /* motion — fast enough to feel instant (Doherty threshold <400ms) */
+  --qa-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --qa-dur:  160ms;
+}
+
+html {
+  background: var(--qa-bg);
+  color: var(--qa-text);
+  font-family: var(--qa-font);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  min-height: 100dvh;
+}
+
+/* Visible, on-brand focus ring for keyboard users (accessibility). */
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--qa-accent-ring);
+  border-radius: var(--qa-radius-sm);
+}
+
+/* ============================================================
+   COMPONENT CLASSES
+   Reused everywhere so a button on Today matches a button on
+   the weekly review. Change once, change everywhere.
+   ============================================================ */
+@layer components {
+  .qa-card {
+    @apply rounded-qa border border-qa-line bg-white;
+    box-shadow: var(--qa-shadow-sm);
+  }
+  /* Interactive cards lift slightly on hover — affordance + Doherty feedback. */
+  .qa-card-link {
+    @apply rounded-qa border border-qa-line bg-white;
+    box-shadow: var(--qa-shadow-sm);
+    transition: box-shadow var(--qa-dur) var(--qa-ease),
+                border-color var(--qa-dur) var(--qa-ease),
+                transform var(--qa-dur) var(--qa-ease);
+  }
+  .qa-card-link:hover {
+    border-color: var(--qa-line-strong);
+    box-shadow: var(--qa-shadow);
+    transform: translateY(-1px);
+  }
+
+  /* Buttons. Generous hit area (Fitts's Law), tactile press feedback. */
+  .qa-btn {
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-qa-sm px-4 py-2 text-[15px] font-semibold;
+    transition: background-color var(--qa-dur) var(--qa-ease),
+                color var(--qa-dur) var(--qa-ease),
+                border-color var(--qa-dur) var(--qa-ease),
+                transform var(--qa-dur) var(--qa-ease);
+  }
+  .qa-btn:active { transform: scale(0.97); }
+  .qa-btn:disabled { opacity: 0.5; pointer-events: none; }
+
+  .qa-btn-primary {
+    background: var(--qa-accent);
+    color: var(--qa-accent-text);
+  }
+  .qa-btn-primary:hover { filter: brightness(1.06); }
+
+  .qa-btn-ghost {
+    @apply border bg-transparent;
+    border-color: var(--qa-line-strong);
+    color: var(--qa-text-2);
+  }
+  .qa-btn-ghost:hover { background: var(--qa-surface); color: var(--qa-text); }
+
+  /* Pills / chips for slip actions, filters, reschedule menu. */
+  .qa-chip {
+    @apply inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium;
+    border-color: var(--qa-line-strong);
+    transition: background-color var(--qa-dur) var(--qa-ease),
+                color var(--qa-dur) var(--qa-ease),
+                border-color var(--qa-dur) var(--qa-ease);
+  }
+  .qa-chip:hover { background: var(--qa-surface); }
+  .qa-chip-on {
+    background: var(--qa-accent);
+    color: var(--qa-accent-text);
+    border-color: var(--qa-accent);
+  }
+
+  .qa-input {
+    @apply w-full rounded-qa-sm border bg-white px-3 py-2 text-[15px];
+    border-color: var(--qa-line-strong);
+    transition: border-color var(--qa-dur) var(--qa-ease);
+  }
+  .qa-input:focus { border-color: var(--qa-accent); outline: none; }
+
+  /* Section eyebrow — the small uppercase label above a card's content. */
+  .qa-eyebrow {
+    @apply text-xs font-semibold uppercase tracking-wide;
+    color: var(--qa-text-2);
+  }
+}
+
+/* ============================================================
+   REVIEW PROSE — the agent's memo reads like writing, not UI.
+   ============================================================ */
+.review-prose {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 16px;
+  line-height: 1.65;
+}
+.review-prose h2 {
+  font-family: var(--qa-font);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--qa-text-2);
+  margin: 1.5em 0 0.5em;
+}
+.review-prose h2:first-child { margin-top: 0; }
+.review-prose p { margin: 0.5em 0; }
+.review-prose strong { font-weight: 700; }
+.review-prose ul { margin: 0.5em 0; padding-left: 1.1em; }
+.review-prose li { margin: 0.25em 0; }
+
+/* ============================================================
+   MOTION — entrances and the completion "pop".
+   The completion pop is the peak of the day's emotional arc
+   (peak-end rule): finishing a task should feel good.
+   ============================================================ */
+@keyframes qa-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes qa-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes qa-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+@keyframes qa-check {
+  from { stroke-dashoffset: 22; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes qa-ring {
+  from { stroke-dashoffset: var(--ring-from, 0); }
+  to   { stroke-dashoffset: var(--ring-to, 0); }
+}
+
+.qa-rise { animation: qa-rise var(--qa-dur) var(--qa-ease) both; }
+.qa-fade { animation: qa-fade 220ms var(--qa-ease) both; }
+.qa-pop  { animation: qa-pop 320ms var(--qa-ease); }
+.qa-check-path {
+  stroke-dasharray: 22;
+  animation: qa-check 280ms var(--qa-ease) both;
+}
+
+/* Respect the user's motion preference — accessibility, and calm. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
