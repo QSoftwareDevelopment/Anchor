@@ -37,7 +37,8 @@ export default function CaptureBar() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (pathname.startsWith("/login")) return null;
+  // The assistant home has its own composer — no capture bar there.
+  if (pathname === "/" || pathname.startsWith("/login")) return null;
 
   function showToast(msg: string) {
     setToast(msg);

@@ -4,8 +4,8 @@ import Nav from "@/components/nav";
 import CaptureBar from "@/components/capture-bar";
 
 export const metadata: Metadata = {
-  title: "Q Software",
-  description: "Internal operating system for Q Software.",
+  title: "Anchor — Q Software",
+  description: "Your AI operating partner.",
 };
 
 export const viewport: Viewport = {

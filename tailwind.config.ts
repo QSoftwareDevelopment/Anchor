@@ -9,13 +9,18 @@ const config: Config = {
     extend: {
       colors: {
         "qa-bg": "var(--qa-bg)",
+        "qa-bg-2": "var(--qa-bg-2)",
         "qa-surface": "var(--qa-surface)",
         "qa-surface-2": "var(--qa-surface-2)",
+        "qa-glass": "var(--qa-glass)",
+        "qa-glass-2": "var(--qa-glass-2)",
         "qa-text": "var(--qa-text)",
         "qa-text-2": "var(--qa-text-2)",
+        "qa-text-3": "var(--qa-text-3)",
         "qa-line": "var(--qa-line)",
         "qa-line-strong": "var(--qa-line-strong)",
         "qa-accent": "var(--qa-accent)",
+        "qa-accent-2": "var(--qa-accent-2)",
         "qa-accent-text": "var(--qa-accent-text)",
         "qa-accent-soft": "var(--qa-accent-soft)",
         "qa-success": "var(--qa-success)",

@@ -243,6 +243,20 @@ alter table gcal_tokens enable row level security;
 create policy gcal_self on gcal_tokens for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+-- ---------- AGENT MESSAGES (the AI assistant's conversation) ----------
+-- Self-only: each founder's chat with the operating partner is private.
+create table agent_messages (
+  id          uuid primary key default gen_random_uuid(),
+  founder_id  uuid not null references founders(user_id) on delete cascade,
+  role        text not null check (role in ('user', 'assistant')),
+  content     text not null,
+  created_at  timestamptz not null default now()
+);
+create index agent_messages_founder_idx on agent_messages (founder_id, created_at);
+alter table agent_messages enable row level security;
+create policy agent_messages_self on agent_messages for all
+  using (founder_id = auth.uid()) with check (founder_id = auth.uid());
+
 -- ============================================================
 -- SEED (run AFTER you and Aaryan have both signed up via Supabase Auth)
 -- Replace the UUIDs with your real auth.users ids, then run with
@@ -252,7 +266,7 @@ create policy gcal_self on gcal_tokens for all
 --   ('SID-AUTH-UUID-HERE',    'Sid'),
 --   ('AARYAN-AUTH-UUID-HERE', 'Aaryan');
 --
--- insert into profiles (user_id, energy_windows, daily_ceiling_minutes) values
+-- insert into founder_profiles (user_id, energy_windows, daily_ceiling_minutes) values
 --   ('SID-AUTH-UUID-HERE',
 --    '[{"days":["mon","tue","wed","thu","fri"],"start":"09:00","end":"12:00"}]', 300),
 --   ('AARYAN-AUTH-UUID-HERE',
