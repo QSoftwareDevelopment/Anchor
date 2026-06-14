@@ -16,6 +16,7 @@ type Msg = { role: "user" | "assistant"; content: string; actions?: Action[] };
 
 const SUGGESTIONS = [
   "Plan my day",
+  "Add a meeting to my calendar",
   "What should I focus on this week?",
   "What slipped — and what should I do about it?",
   "Where's my time going?",
@@ -110,7 +111,7 @@ export default function AssistantHome({
           <Orb />
           <div>
             <h1 className="text-[26px] font-[650] leading-tight md:text-[30px]">
-              {greeting}, <span className="qa-grad-text">{founderName}</span>.
+              {greeting}, <span className="qa-grad-text-anim">{founderName}</span>.
             </h1>
             <p className="mt-0.5 text-sm text-qa-text-2">{statusLine(glance)}</p>
           </div>
@@ -163,7 +164,7 @@ export default function AssistantHome({
       </div>
 
       {/* composer */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-qa-line bg-[var(--qa-bg)]/70 pb-[58px] backdrop-blur-xl md:pb-0 md:pl-[60px]">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-qa-line bg-[var(--qa-bg)]/70 pb-[58px] backdrop-blur-xl md:pb-0 md:pl-[232px]">
         <div className="mx-auto max-w-3xl px-5 py-3.5">
           {!empty && (
             <div className="mb-2.5 flex gap-2 overflow-x-auto pb-0.5">
@@ -218,7 +219,7 @@ function statusLine(g: Glance): string {
 function GlanceCard({ glance }: { glance: Glance }) {
   const open = glance.blocks.filter((b) => !b.done);
   return (
-    <section className="qa-card mt-6 overflow-hidden qa-rise">
+    <section className="qa-card-grad mt-6 overflow-hidden qa-rise">
       <div className="flex items-center justify-between border-b border-qa-line px-5 py-3">
         <span className="qa-eyebrow">Today</span>
         {glance.shipped > 0 && (
@@ -280,15 +281,29 @@ function Orb({ small, thinking }: { small?: boolean; thinking?: boolean }) {
   const d = small ? 30 : 44;
   return (
     <span
-      className={`relative inline-block shrink-0 rounded-full ${thinking ? "animate-[qa-float_1.6s_ease-in-out_infinite]" : ""}`}
-      style={{
-        width: d,
-        height: d,
-        background: "var(--qa-grad)",
-        boxShadow: "0 0 0 1px rgba(124,116,255,0.4), 0 6px 22px rgba(124,116,255,0.45)",
-      }}
+      className={`relative inline-grid shrink-0 place-items-center rounded-full ${thinking ? "animate-[qa-float_1.6s_ease-in-out_infinite]" : ""}`}
+      style={{ width: d, height: d }}
       aria-hidden
     >
+      {/* spinning halo ring */}
+      <span
+        className="qa-spin-slow absolute rounded-full"
+        style={{
+          inset: -2,
+          background:
+            "conic-gradient(from 0deg, rgba(124,116,255,0) 0%, rgba(70,214,255,0.75) 35%, rgba(124,116,255,0) 65%)",
+          opacity: 0.75,
+        }}
+      />
+      {/* core */}
+      <span
+        className="absolute inset-0 rounded-full"
+        style={{
+          background: "var(--qa-grad)",
+          boxShadow: "0 0 0 1px rgba(124,116,255,0.4), 0 6px 22px rgba(124,116,255,0.45)",
+        }}
+      />
+      {/* glossy highlight */}
       <span
         className="absolute rounded-full"
         style={{ inset: small ? 8 : 12, background: "radial-gradient(circle at 35% 30%, rgba(255,255,255,0.9), rgba(255,255,255,0.05))" }}

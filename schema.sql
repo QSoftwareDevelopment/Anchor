@@ -243,6 +243,31 @@ alter table gcal_tokens enable row level security;
 create policy gcal_self on gcal_tokens for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+-- ---------- CALENDAR EVENTS (founder-entered events, not auto-scheduled work) ----------
+-- Meetings, calls, appointments — things that belong on the calendar but
+-- aren't tasks the scheduler should place. Each can be synced to Google
+-- Calendar (gcal_event_id). Shared two-founder workspace policy.
+create table calendar_events (
+  id            uuid primary key default gen_random_uuid(),
+  founder_id    uuid not null references founders(user_id) on delete cascade,
+  title         text not null,
+  start_at      timestamptz not null,
+  end_at        timestamptz not null,
+  all_day       boolean not null default false,
+  location      text,
+  notes         text,
+  category      text not null default 'event',
+  gcal_event_id text,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+create index calendar_events_founder_idx on calendar_events (founder_id, start_at);
+alter table calendar_events enable row level security;
+create policy calendar_events_all on calendar_events for all
+  using (is_founder()) with check (is_founder());
+create trigger calendar_events_touch before update on calendar_events
+  for each row execute function set_updated_at();
+
 -- ---------- AGENT MESSAGES (the AI assistant's conversation) ----------
 -- Self-only: each founder's chat with the operating partner is private.
 create table agent_messages (

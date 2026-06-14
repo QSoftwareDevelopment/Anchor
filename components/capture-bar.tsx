@@ -68,7 +68,7 @@ export default function CaptureBar() {
   }
 
   return (
-    <div className="sticky top-0 z-40 border-b border-qa-line bg-qa-bg/85 backdrop-blur md:pl-[60px]">
+    <div className="sticky top-0 z-40 border-b border-qa-line bg-qa-bg/85 backdrop-blur md:pl-[232px]">
       <form onSubmit={submit} className="mx-auto flex max-w-2xl items-center gap-2 px-5 py-2.5">
         <div className="relative min-w-0 flex-1">
           <input

@@ -24,6 +24,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createBrowserSupabase } from "@/lib/supabase-browser";
 import ProgressRing from "@/components/progress-ring";
+import EventModal, { type CreatedEvent } from "@/components/event-modal";
 import { formatTime, todayISO, mondayOf } from "@/lib/utils";
 
 type Block = {
@@ -39,12 +40,28 @@ type Block = {
   } | null;
 };
 type Unplaced = { task_id: string; title: string; reason: string };
+type TodayEvent = {
+  id: string;
+  title: string;
+  start_at: string;
+  end_at: string;
+  all_day: boolean;
+  location: string | null;
+  notes: string | null;
+  category?: string;
+};
 
 const supabase = createBrowserSupabase();
 
 export default function TodayPage() {
   const [blocks, setBlocks] = useState<Block[]>([]);
+  const [events, setEvents] = useState<TodayEvent[]>([]);
   const [unplaced, setUnplaced] = useState<Unplaced[]>([]);
+
+  // event add/edit
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<TodayEvent | null>(null);
+  const [gcal, setGcal] = useState(false);
   const [partnerFlag, setPartnerFlag] = useState<{ name: string; commitment: string } | null>(null);
   const [me, setMe] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,6 +89,13 @@ export default function TodayPage() {
     setBlocks((data as unknown as Block[]) ?? []);
   }
 
+  async function loadEvents() {
+    const res = await fetch(`/api/events?from=${today}T00:00:00&to=${today}T23:59:59`)
+      .then((r) => r.json())
+      .catch(() => ({ events: [] }));
+    setEvents((res.events as TodayEvent[]) ?? []);
+  }
+
   useEffect(() => {
     (async () => {
       const { data: auth } = await supabase.auth.getUser();
@@ -82,6 +106,8 @@ export default function TodayPage() {
       }
       setMe(uid);
       await loadBlocks(uid);
+      void loadEvents();
+      fetch("/api/gcal/status").then((r) => r.json()).then((d) => setGcal(Boolean(d.connected))).catch(() => {});
 
       const monday = mondayOf(new Date());
 
@@ -208,10 +234,37 @@ export default function TodayPage() {
     setReplanning(false);
   }
 
+  // event handlers
+  function onEventCreated(ev: CreatedEvent) {
+    setEvents((es) => [...es, ev as TodayEvent].sort((a, b) => a.start_at.localeCompare(b.start_at)));
+    setNote("Event added.");
+  }
+  function onEventUpdated(ev: CreatedEvent) {
+    setEvents((es) => es.map((e) => (e.id === ev.id ? (ev as TodayEvent) : e)).sort((a, b) => a.start_at.localeCompare(b.start_at)));
+  }
+  function onEventDeleted(id: string) {
+    setEvents((es) => es.filter((e) => e.id !== id));
+  }
+  function openNewEvent() {
+    setEditingEvent(null);
+    setModalOpen(true);
+  }
+  function openEditEvent(ev: TodayEvent) {
+    setEditingEvent(ev);
+    setModalOpen(true);
+  }
+
   const liveBlocks = useMemo(() => blocks.filter((b) => b.tasks), [blocks]);
   const doneCount = liveBlocks.filter((b) => b.tasks!.status === "done").length;
   const total = liveBlocks.length;
   const allDone = total > 0 && doneCount === total;
+
+  // merged chronological timeline of task blocks + calendar events
+  const timeline = useMemo(() => {
+    const blockItems = liveBlocks.map((b) => ({ kind: "block" as const, sort: b.start_at, block: b }));
+    const eventItems = events.map((e) => ({ kind: "event" as const, sort: e.start_at, ev: e }));
+    return [...blockItems, ...eventItems].sort((a, b) => a.sort.localeCompare(b.sort));
+  }, [liveBlocks, events]);
 
   const numberOne =
     liveBlocks.find((b) => b.tasks!.is_anchor && b.tasks!.status !== "done") ??
@@ -318,11 +371,39 @@ export default function TodayPage() {
         </p>
       )}
 
-      {/* ---------- SCHEDULE ---------- */}
-      {liveBlocks.length > 0 && (
+      {/* ---------- SCHEDULE (task blocks + events, merged by time) ---------- */}
+      {timeline.length > 0 ? (
         <section className="mt-6">
-          <p className="qa-eyebrow mb-1">The day</p>
-          {liveBlocks.map((b) => {
+          <div className="mb-1 flex items-center justify-between">
+            <p className="qa-eyebrow">The day</p>
+            <button onClick={openNewEvent} className="qa-chip">
+              + Event
+            </button>
+          </div>
+          {timeline.map((it) => {
+            if (it.kind === "event") {
+              const e = it.ev;
+              return (
+                <button
+                  key={`e${e.id}`}
+                  onClick={() => openEditEvent(e)}
+                  className="group flex w-full items-center gap-3 border-t border-qa-line py-3 text-left transition-colors hover:bg-qa-glass/40"
+                >
+                  <span className="w-[74px] shrink-0 font-mono text-sm tabular-nums text-qa-text-2">
+                    {e.all_day ? "all day" : formatTime(e.start_at)}
+                  </span>
+                  <span title="event" className="h-2 w-2 shrink-0 rounded-full bg-qa-accent-2" />
+                  <span className="min-w-0 flex-1 text-[15px]">
+                    {e.title}
+                    {e.location && <span className="ml-2 text-xs text-qa-text-3">· {e.location}</span>}
+                  </span>
+                  <span className="rounded-full border border-qa-line px-2 py-0.5 text-[10px] uppercase tracking-wide text-qa-text-3">
+                    event
+                  </span>
+                </button>
+              );
+            }
+            const b = it.block;
             const t = b.tasks!;
             const done = t.status === "done";
             const isNumberOne = numberOne?.tasks?.id === t.id;
@@ -383,6 +464,14 @@ export default function TodayPage() {
             );
           })}
         </section>
+      ) : (
+        !loading && (
+          <div className="mt-6 flex justify-center">
+            <button onClick={openNewEvent} className="qa-btn qa-btn-ghost text-sm">
+              + Add an event
+            </button>
+          </div>
+        )
       )}
 
       {/* ---------- REPLAN (a fresh start, never a failure) ---------- */}
@@ -416,6 +505,17 @@ export default function TodayPage() {
           ))}
         </section>
       )}
+
+      <EventModal
+        open={modalOpen}
+        onClose={() => { setModalOpen(false); setEditingEvent(null); }}
+        onCreated={onEventCreated}
+        onUpdated={onEventUpdated}
+        onDeleted={onEventDeleted}
+        event={editingEvent as CreatedEvent | null}
+        defaultDate={editingEvent ? undefined : today}
+        gcalConnected={gcal}
+      />
     </div>
   );
 }

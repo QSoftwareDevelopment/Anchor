@@ -111,6 +111,87 @@ export async function createBlockEvent(
   return data.id as string;
 }
 
+// ---------- write: a real calendar event (meeting / appointment) ----------
+// Distinct from createBlockEvent: no "▸" prefix, carries its own tag so
+// the agent's replan never deletes founder-entered events. Supports
+// all-day events (date-only) and timed events.
+const EVENT_TAG = { qsoftware_event: "1" };
+
+export type GcalEventInput = {
+  title: string;
+  start: Date;
+  end: Date;
+  allDay?: boolean;
+  location?: string;
+  description?: string;
+};
+
+function eventBody(ev: GcalEventInput, timezone: string) {
+  const dateOnly = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+  const when = ev.allDay
+    ? { start: { date: dateOnly(ev.start) }, end: { date: dateOnly(ev.end) } }
+    : {
+        start: { dateTime: ev.start.toISOString(), timeZone: timezone },
+        end: { dateTime: ev.end.toISOString(), timeZone: timezone },
+      };
+  return {
+    summary: ev.title,
+    location: ev.location || undefined,
+    description: ev.description || undefined,
+    ...when,
+    extendedProperties: { private: { ...EVENT_TAG } },
+  };
+}
+
+export async function createCalendarEvent(
+  tokens: Tokens,
+  ev: GcalEventInput,
+  timezone: string
+): Promise<string> {
+  const token = await accessTokenFor(tokens);
+  const res = await fetch(
+    `${GCAL}/calendars/${encodeURIComponent(tokens.calendar_id)}/events`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(eventBody(ev, timezone)),
+    }
+  );
+  if (!res.ok) throw new Error(`Calendar event create failed: ${await res.text()}`);
+  const data = await res.json();
+  return data.id as string;
+}
+
+export async function updateCalendarEvent(
+  tokens: Tokens,
+  eventId: string,
+  ev: GcalEventInput,
+  timezone: string
+): Promise<void> {
+  const token = await accessTokenFor(tokens);
+  const res = await fetch(
+    `${GCAL}/calendars/${encodeURIComponent(tokens.calendar_id)}/events/${eventId}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(eventBody(ev, timezone)),
+    }
+  );
+  if (!res.ok && res.status !== 404)
+    throw new Error(`Calendar event update failed: ${await res.text()}`);
+}
+
 export async function deleteEvent(tokens: Tokens, eventId: string): Promise<void> {
   const token = await accessTokenFor(tokens);
   const res = await fetch(

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Nav from "@/components/nav";
 import CaptureBar from "@/components/capture-bar";
+import CommandPalette from "@/components/command-palette";
 
 export const metadata: Metadata = {
   title: "Anchor — Q Software",
@@ -29,10 +30,13 @@ export default function RootLayout({
         />
       </head>
       <body>
+        {/* Futuristic fixed backdrop: drifting aurora + perspective grid. */}
+        <div className="qa-bg-fx" aria-hidden />
+        <CommandPalette />
         <CaptureBar />
         <Nav />
-        {/* Desktop: clear the 60px sidebar. Mobile: clear the bottom tab bar. */}
-        <main className="pb-20 md:pb-8 md:pl-[60px]">{children}</main>
+        {/* Desktop: clear the 232px sidebar. Mobile: clear the bottom tab bar. */}
+        <main className="pb-20 md:pb-8 md:pl-[232px]">{children}</main>
       </body>
     </html>
   );

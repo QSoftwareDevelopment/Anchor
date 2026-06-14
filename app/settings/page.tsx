@@ -5,8 +5,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { createBrowserSupabase } from "@/lib/supabase-browser";
+import Link from "next/link";
 
 type EnergyWindow = { days: string[]; start: string; end: string };
 type Profile = {
@@ -19,14 +18,16 @@ type Profile = {
 };
 
 const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-const supabase = createBrowserSupabase();
 
 export default function SettingsPage() {
-  const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Google Calendar connection
+  const [gcal, setGcal] = useState<{ connected: boolean; connected_at: string | null } | null>(null);
+  const [gcalBusy, setGcalBusy] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -34,7 +35,21 @@ export default function SettingsPage() {
       if (res.ok) setProfile(await res.json());
       else setError("Couldn't load your profile.");
     })();
+    fetch("/api/gcal/status")
+      .then((r) => r.json())
+      .then((d) => setGcal({ connected: Boolean(d.connected), connected_at: d.connected_at ?? null }))
+      .catch(() => setGcal({ connected: false, connected_at: null }));
   }, []);
+
+  async function disconnectGcal() {
+    setGcalBusy(true);
+    try {
+      await fetch("/api/gcal/disconnect", { method: "POST" });
+      setGcal({ connected: false, connected_at: null });
+    } finally {
+      setGcalBusy(false);
+    }
+  }
 
   async function save() {
     if (!profile) return;
@@ -58,12 +73,6 @@ export default function SettingsPage() {
     }
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
-  }
-
-  async function signOut() {
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
   }
 
   function updateWindow(i: number, patch: Partial<EnergyWindow>) {
@@ -92,9 +101,9 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-lg px-5 py-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Settings</h1>
-        <button onClick={signOut} className="text-sm text-qa-text-2 hover:underline">
+        <Link href="/signout" className="text-sm text-qa-text-2 hover:text-qa-warn hover:underline">
           Sign out {profile.display_name}
-        </button>
+        </Link>
       </div>
       <p className="mt-1 text-sm text-qa-text-2">
         The scheduler treats everything here as a hard constraint.
@@ -263,6 +272,63 @@ export default function SettingsPage() {
               onChange={(e) => setProfile({ ...profile, timezone: e.target.value })}
             />
           </div>
+        </div>
+      </section>
+
+      {/* Google Calendar */}
+      <section className="mt-7">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-qa-text-2">
+          Google Calendar
+        </h2>
+        <div className="mt-2 flex flex-wrap items-center gap-3 rounded-qa border border-qa-line bg-white p-4">
+          <span
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-qa-sm"
+            style={{ background: "var(--qa-glass-2)" }}
+            aria-hidden
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="17" rx="2" />
+              <path d="M3 9h18M8 2v4M16 2v4" />
+              <path d="M9 14l2 2 4-4" stroke="var(--qa-success)" />
+            </svg>
+          </span>
+          <div className="min-w-0 flex-1">
+            {gcal == null ? (
+              <p className="text-sm text-qa-text-2">Checking connection…</p>
+            ) : gcal.connected ? (
+              <>
+                <p className="flex items-center gap-1.5 text-sm font-medium text-qa-success">
+                  <span className="h-1.5 w-1.5 rounded-full bg-qa-success" /> Connected
+                </p>
+                <p className="text-xs text-qa-text-2">
+                  Plans and events you add sync to your primary calendar. Real meetings are never touched.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-qa-text">Not connected</p>
+                <p className="text-xs text-qa-text-2">
+                  Connect to push your scheduled blocks and events onto your real calendar.
+                </p>
+              </>
+            )}
+          </div>
+          {gcal?.connected ? (
+            <button
+              onClick={disconnectGcal}
+              disabled={gcalBusy}
+              className="shrink-0 rounded-qa-sm border border-qa-line-strong px-3 py-1.5 text-sm font-medium text-qa-text-2 hover:text-qa-warn disabled:opacity-50"
+            >
+              {gcalBusy ? "…" : "Disconnect"}
+            </button>
+          ) : (
+            <a
+              href="/api/gcal/connect"
+              className="shrink-0 rounded-qa-sm bg-qa-accent px-3 py-1.5 text-sm font-semibold text-qa-accent-text"
+            >
+              Connect
+            </a>
+          )}
         </div>
       </section>
 

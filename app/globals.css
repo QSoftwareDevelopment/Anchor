@@ -61,6 +61,55 @@ body {
   background-attachment: fixed;
 }
 
+/* ============================================================
+   FUTURISTIC BACKGROUND FX
+   A fixed, GPU-cheap layer behind everything: drifting aurora
+   blobs, a faint perspective grid, and a vignette. Transform/
+   opacity only, so it animates smoothly and idles quietly.
+   ============================================================ */
+.qa-bg-fx {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+/* the perspective grid, faded out toward the edges */
+.qa-bg-fx::after {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  background-image:
+    linear-gradient(rgba(124, 116, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124, 116, 255, 0.06) 1px, transparent 1px);
+  background-size: 46px 46px;
+  -webkit-mask-image: radial-gradient(60% 55% at 50% 38%, #000 0%, transparent 78%);
+  mask-image: radial-gradient(60% 55% at 50% 38%, #000 0%, transparent 78%);
+  opacity: 0.7;
+  animation: qa-grid-pan 38s linear infinite;
+}
+/* two slow-drifting aurora blobs */
+.qa-bg-fx::before {
+  content: "";
+  position: absolute;
+  inset: -25%;
+  background:
+    radial-gradient(38rem 38rem at 20% 12%, rgba(124, 116, 255, 0.22), transparent 60%),
+    radial-gradient(34rem 34rem at 82% 8%, rgba(70, 214, 255, 0.16), transparent 58%),
+    radial-gradient(40rem 40rem at 60% 105%, rgba(150, 90, 255, 0.16), transparent 62%);
+  animation: qa-aurora-drift 26s var(--qa-ease) infinite alternate;
+  will-change: transform;
+}
+@keyframes qa-aurora-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(-2.5%, 2%, 0) scale(1.08); }
+  100% { transform: translate3d(2.5%, -1.5%, 0) scale(1.04); }
+}
+@keyframes qa-grid-pan {
+  from { background-position: 0 0, 0 0; }
+  to   { background-position: 46px 46px, 46px 46px; }
+}
+
 /* Light text on the dark canvas for all form controls. */
 input, textarea, select, button { color: inherit; font-family: inherit; }
 input, textarea, select { color: var(--qa-text); }
@@ -108,6 +157,43 @@ input, textarea, select { color: var(--qa-text); }
     background: var(--qa-glass-2);
     transform: translateY(-1px);
   }
+
+  /* Gradient-bordered glass: a luminous hairline ring around a panel.
+     Uses a masked border trick so the fill stays glassy. */
+  .qa-card-grad {
+    position: relative;
+    background: var(--qa-glass);
+    border-radius: var(--qa-radius);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+  .qa-card-grad::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(124,116,255,0.55), rgba(70,214,255,0.28) 45%, rgba(255,255,255,0.04) 80%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  /* Soft outer glow for hero/active elements. */
+  .qa-glow { box-shadow: var(--qa-glow); }
+  .qa-hover-glow { transition: box-shadow var(--qa-dur) var(--qa-ease), transform var(--qa-dur) var(--qa-ease); }
+  .qa-hover-glow:hover { box-shadow: var(--qa-glow); transform: translateY(-1px); }
+
+  /* Animated gradient text (shifting hues) for marquee headings. */
+  .qa-grad-text-anim {
+    background: linear-gradient(120deg, #c9c4ff, #b9e9ff, #c9c4ff);
+    background-size: 200% auto;
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+    animation: qa-text-shift 6s linear infinite;
+  }
+  @keyframes qa-text-shift { to { background-position: 200% center; } }
 
   .qa-btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
@@ -181,10 +267,21 @@ input, textarea, select { color: var(--qa-text); }
 @keyframes qa-check { from { stroke-dashoffset: 22; } to { stroke-dashoffset: 0; } }
 @keyframes qa-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
 @keyframes qa-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes qa-pop-in { from { opacity: 0; transform: translateY(12px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes qa-sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes qa-grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes qa-shimmer { 0% { background-position: -468px 0; } 100% { background-position: 468px 0; } }
+@keyframes qa-spin { to { transform: rotate(360deg); } }
+.qa-spin-slow { animation: qa-spin 7s linear infinite; }
+@keyframes qa-glow { 0%, 100% { box-shadow: 0 0 0 1px rgba(124,116,255,0.25), 0 6px 20px rgba(124,116,255,0.18); } 50% { box-shadow: 0 0 0 1px rgba(124,116,255,0.5), 0 10px 34px rgba(124,116,255,0.4); } }
 
 .qa-rise { animation: qa-rise var(--qa-dur) var(--qa-ease) both; }
 .qa-fade { animation: qa-fade 240ms var(--qa-ease) both; }
 .qa-pop  { animation: qa-pop 320ms var(--qa-ease); }
+.qa-pop-in { animation: qa-pop-in 220ms var(--qa-ease) both; }
+.qa-sheet { animation: qa-sheet-up 280ms var(--qa-ease) both; }
+.qa-grow-x { transform-origin: left center; animation: qa-grow-x 620ms var(--qa-ease) both; }
+.qa-glow-pulse { animation: qa-glow 2.6s var(--qa-ease) infinite; }
 .qa-check-path { stroke-dasharray: 22; animation: qa-check 280ms var(--qa-ease) both; }
 
 /* the agent's "thinking" dots */

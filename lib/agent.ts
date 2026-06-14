@@ -8,8 +8,8 @@
 // founder, so RLS still scopes everything to the two of them.
 // ============================================================
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { buildSchedule, type SchedulableTask, type BusyInterval } from "@/lib/scheduler";
-import { fetchBusy, createBlockEvent, clearAgentEvents } from "@/lib/gcal";
+import { createCalendarEvent } from "@/lib/gcal";
+import { scheduleDaysFor } from "@/lib/schedule-run";
 import { mondayOf, todayISO } from "@/lib/utils";
 
 const API_URL = "https://api.anthropic.com/v1/messages";
@@ -185,6 +185,34 @@ const TOOLS = [
       "Where time is going: this week's minutes by category, share on goal-linked work, deep vs shallow, tasks shipped, and the learned estimate multipliers.",
     input_schema: { type: "object", properties: {} },
   },
+  {
+    name: "add_calendar_event",
+    description:
+      "Add a real event to the founder's calendar — a meeting, call, or appointment (NOT a task to be auto-scheduled). Syncs to Google Calendar if connected. Use this when the founder says things like 'add a meeting with X at 3pm' or 'put dentist on my calendar Friday'. Provide start (and end if known) as ISO 8601 with timezone offset, or set all_day with a date.",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        start: { type: "string", description: "ISO 8601 datetime, e.g. 2026-06-15T15:00:00-04:00. For all-day, a YYYY-MM-DD date." },
+        end: { type: "string", description: "ISO 8601 datetime; defaults to +1h for timed events." },
+        all_day: { type: "boolean" },
+        location: { type: "string" },
+        notes: { type: "string" },
+      },
+      required: ["title", "start"],
+    },
+  },
+  {
+    name: "list_events",
+    description: "List the founder's calendar events (meetings/appointments) in a date range. Defaults to the next 7 days.",
+    input_schema: {
+      type: "object",
+      properties: {
+        from: { type: "string", description: "ISO datetime or YYYY-MM-DD, start of range" },
+        to: { type: "string", description: "ISO datetime or YYYY-MM-DD, end of range" },
+      },
+    },
+  },
 ];
 
 // ============================================================
@@ -208,91 +236,10 @@ async function ensureProjectId(ctx: AgentContext, given?: string): Promise<strin
   return made.id as string;
 }
 
-async function scheduleDays(ctx: AgentContext, days: Date[]) {
-  const { supabase, founder, now } = ctx;
-  const [{ data: profile }, { data: tokenRow }, { data: tasks }] = await Promise.all([
-    supabase.from("founder_profiles").select("*").eq("user_id", founder.user_id).maybeSingle(),
-    supabase.from("gcal_tokens").select("refresh_token, calendar_id").eq("user_id", founder.user_id).maybeSingle(),
-    supabase
-      .from("tasks")
-      .select("*")
-      .eq("owner", founder.user_id)
-      .in("status", ["planned", "scheduled"]),
-  ]);
-  if (!profile) throw new Error("No profile yet — set up energy windows in Settings (or run the seed).");
-
-  const schedulable: SchedulableTask[] = (tasks ?? []).map((t) => ({
-    id: t.id,
-    title: t.title,
-    energy: t.energy,
-    category: t.category,
-    estimateMinutes: t.estimate_minutes ?? 30,
-    dueDate: t.due_date ?? undefined,
-    isAnchor: t.is_anchor,
-    slipCount: t.slip_count,
-  }));
-
-  const dayKeys = days.map((d) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  });
-
-  // wipe our existing blocks for those days (DB + GCal best-effort)
-  await supabase.from("schedule_blocks").delete().eq("founder_id", founder.user_id).in("block_date", dayKeys);
-  let busy: BusyInterval[] = [];
-  if (tokenRow) {
-    try {
-      const span0 = new Date(days[0]); span0.setHours(0, 0, 0, 0);
-      const span1 = new Date(days[days.length - 1]); span1.setHours(23, 59, 59, 0);
-      await clearAgentEvents(tokenRow, span0, span1);
-      busy = await fetchBusy(tokenRow, span0, span1);
-    } catch { busy = []; }
-  }
-
-  const result = buildSchedule({
-    profile: {
-      userId: founder.user_id,
-      energyWindows: profile.energy_windows ?? [],
-      dailyCeilingMinutes: profile.daily_ceiling_minutes ?? 300,
-      multipliers: profile.multipliers ?? { _default: 1.5 },
-      timezone: profile.timezone ?? "America/Toronto",
-    },
-    tasks: schedulable,
-    busy,
-    days,
-    now,
-  });
-
-  for (const block of result.blocks) {
-    const bd = `${block.start.getFullYear()}-${String(block.start.getMonth() + 1).padStart(2, "0")}-${String(block.start.getDate()).padStart(2, "0")}`;
-    let gcalId: string | null = null;
-    if (tokenRow) {
-      try {
-        gcalId = await createBlockEvent(
-          tokenRow,
-          { title: block.title, start: block.start, end: block.end, taskId: block.taskId },
-          profile.timezone ?? "America/Toronto"
-        );
-      } catch { gcalId = null; }
-    }
-    await supabase.from("schedule_blocks").insert({
-      task_id: block.taskId,
-      founder_id: founder.user_id,
-      block_date: bd,
-      start_at: block.start.toISOString(),
-      end_at: block.end.toISOString(),
-      gcal_event_id: gcalId,
-    });
-    await supabase.from("tasks").update({ status: "scheduled" }).eq("id", block.taskId);
-  }
-
-  return {
-    placed: result.blocks.length,
-    unplaced: result.unplaced.map((u) => ({ title: u.task.title, reason: u.reason })),
-    minutes_by_day: result.minutesPlannedByDay,
-  };
+// Thin wrapper over the shared scheduler runner (lib/schedule-run.ts),
+// which both the agent and the REST planning endpoints use.
+function scheduleDays(ctx: AgentContext, days: Date[]) {
+  return scheduleDaysFor(ctx.supabase, ctx.founder.user_id, days, ctx.now);
 }
 
 const fmtTime = (iso: string) =>
@@ -469,6 +416,86 @@ async function dispatchTool(
         },
       };
     }
+    case "add_calendar_event": {
+      const title = s("title");
+      const startStr = s("start");
+      if (!title || !startStr) return { result: { error: "title and start required" } };
+      const allDay = b("all_day") ?? false;
+      const start = new Date(allDay && startStr.length === 10 ? startStr + "T00:00:00" : startStr);
+      if (isNaN(start.getTime())) return { result: { error: "couldn't parse start time" } };
+      const endStr = s("end");
+      const end = endStr
+        ? new Date(endStr)
+        : new Date(start.getTime() + (allDay ? 24 : 1) * 3_600_000);
+
+      const { data: inserted, error } = await supabase
+        .from("calendar_events")
+        .insert({
+          founder_id: founder.user_id,
+          title,
+          start_at: start.toISOString(),
+          end_at: end.toISOString(),
+          all_day: allDay,
+          location: s("location") ?? null,
+          notes: s("notes") ?? null,
+        })
+        .select("id, title, start_at, end_at, all_day")
+        .single();
+      if (error) return { result: { error: error.message } };
+
+      let synced = false;
+      const { data: tokenRow } = await supabase
+        .from("gcal_tokens")
+        .select("refresh_token, calendar_id")
+        .eq("user_id", founder.user_id)
+        .maybeSingle();
+      if (tokenRow) {
+        const { data: profile } = await supabase
+          .from("founder_profiles")
+          .select("timezone")
+          .eq("user_id", founder.user_id)
+          .maybeSingle();
+        try {
+          const gcalId = await createCalendarEvent(
+            tokenRow,
+            { title, start, end, allDay, location: s("location"), description: s("notes") },
+            profile?.timezone ?? "America/Toronto"
+          );
+          await supabase.from("calendar_events").update({ gcal_event_id: gcalId }).eq("id", inserted.id);
+          synced = true;
+        } catch {
+          /* saved locally even if push fails */
+        }
+      }
+
+      const when = allDay
+        ? start.toLocaleDateString("en-CA", { month: "short", day: "numeric" })
+        : `${fmtTime(start.toISOString())}, ${start.toLocaleDateString("en-CA", { month: "short", day: "numeric" })}`;
+      return {
+        result: { ...inserted, synced },
+        action: {
+          kind: "event",
+          label: synced ? "Added to calendar" : "Saved event",
+          detail: `${title} · ${when}`,
+        },
+      };
+    }
+    case "list_events": {
+      let q = supabase
+        .from("calendar_events")
+        .select("id, title, start_at, end_at, all_day, location")
+        .order("start_at");
+      const from = s("from");
+      const to = s("to");
+      q = q.gte("start_at", from ?? now.toISOString());
+      if (to) q = q.lte("start_at", to);
+      else {
+        const week = new Date(now.getTime() + 7 * 86_400_000);
+        q = q.lte("start_at", week.toISOString());
+      }
+      const { data, error } = await q.limit(50);
+      return { result: error ? { error: error.message } : data };
+    }
     default:
       return { result: { error: `unknown tool ${name}` } };
   }
@@ -510,7 +537,7 @@ async function loadSnapshot(ctx: AgentContext): Promise<string> {
 function systemPrompt(ctx: AgentContext, snapshot: string): string {
   return `You are the operating partner for Q Software — a two-founder startup run by Sid and Aaryan. You are talking with ${ctx.founder.display_name}. You are not a chatbot or a cheerleader; you are the sharp third person in the room who keeps the plan honest and the calendar realistic, and who actually does the work when asked.
 
-You have tools. USE THEM to take real action — don't describe what you would do, do it. When ${ctx.founder.display_name} asks you to plan the day or week, actually call plan_day / plan_week. When they mention something to do, create the task. When they want to know where time is going, call get_insights. Prefer acting over asking; ask at most one short clarifying question, and only when you genuinely can't proceed.
+You have tools. USE THEM to take real action — don't describe what you would do, do it. When ${ctx.founder.display_name} asks you to plan the day or week, actually call plan_day / plan_week. When they mention something to do, create the task. When they name a meeting, call, or appointment at a specific time ("dentist Friday 2pm", "investor call tomorrow at 10"), call add_calendar_event so it lands on their real Google Calendar. When they want to know where time is going, call get_insights. Prefer acting over asking; ask at most one short clarifying question, and only when you genuinely can't proceed.
 
 VOICE:
 - Warm but crisp. Lead with the point. Short paragraphs, plain language. No corporate filler, no AI-speak ("I'd be happy to", "Great question").
