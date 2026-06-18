@@ -127,18 +127,32 @@ export type GcalEventInput = {
 };
 
 function eventBody(ev: GcalEventInput, timezone: string) {
-  const dateOnly = (d: Date) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  };
-  const when = ev.allDay
-    ? { start: { date: dateOnly(ev.start) }, end: { date: dateOnly(ev.end) } }
-    : {
-        start: { dateTime: ev.start.toISOString(), timeZone: timezone },
-        end: { dateTime: ev.end.toISOString(), timeZone: timezone },
-      };
+  // Stored instants hold the founder's wall-clock as UTC digits, so we read
+  // the UTC face of the Date and let Google's `timeZone` resolve it.
+  const dateOnly = (d: Date) => d.toISOString().slice(0, 10); // YYYY-MM-DD
+  // Timezone-naive local datetime (no trailing Z). Sending a UTC `Z` here would
+  // make Google treat it as an absolute instant and use `timeZone` for display
+  // only — shifting the event by the UTC offset. A naive string + timeZone makes
+  // Google interpret the wall-clock in the founder's zone (the correct behavior).
+  const naive = (d: Date) => d.toISOString().slice(0, 19); // YYYY-MM-DDTHH:mm:ss
+
+  let when;
+  if (ev.allDay) {
+    const startDate = dateOnly(ev.start);
+    let endDate = dateOnly(ev.end);
+    // Google treats an all-day `end.date` as EXCLUSIVE — a single-day event must
+    // end on the next day. Bump if the caller passed a same-day (or earlier) end.
+    if (endDate <= startDate) {
+      endDate = dateOnly(new Date(ev.start.getTime() + 24 * 3_600_000));
+    }
+    when = { start: { date: startDate }, end: { date: endDate } };
+  } else {
+    when = {
+      start: { dateTime: naive(ev.start), timeZone: timezone },
+      end: { dateTime: naive(ev.end), timeZone: timezone },
+    };
+  }
+
   return {
     summary: ev.title,
     location: ev.location || undefined,
