@@ -268,6 +268,62 @@ create policy calendar_events_all on calendar_events for all
 create trigger calendar_events_touch before update on calendar_events
   for each row execute function set_updated_at();
 
+-- ---------- CONTROL CENTER: money / resources / contacts ----------
+-- Lightweight partnership-admin primitives. Shared-workspace RLS.
+create table finance_entries (
+  id          uuid primary key default gen_random_uuid(),
+  kind        text not null check (kind in ('income', 'expense', 'balance')),
+  amount      numeric not null,
+  currency    text not null default 'CAD',
+  category    text not null default 'general',
+  description text,
+  recurring   boolean not null default false,
+  occurred_on date not null default current_date,
+  created_by  uuid references founders(user_id),
+  created_at  timestamptz not null default now()
+);
+create index finance_entries_date_idx on finance_entries (occurred_on);
+alter table finance_entries enable row level security;
+create policy finance_entries_all on finance_entries for all
+  using (is_founder()) with check (is_founder());
+
+create table resources (
+  id         uuid primary key default gen_random_uuid(),
+  title      text not null,
+  url        text,
+  category   text not null default 'link',
+  notes      text,
+  created_by uuid references founders(user_id),
+  created_at timestamptz not null default now()
+);
+alter table resources enable row level security;
+create policy resources_all on resources for all
+  using (is_founder()) with check (is_founder());
+
+create table contacts (
+  id             uuid primary key default gen_random_uuid(),
+  name           text not null,
+  company        text,
+  email          text,
+  phone          text,
+  stage          text not null default 'lead'
+                 check (stage in ('lead', 'active', 'client', 'dormant', 'lost')),
+  owner          uuid references founders(user_id),
+  last_touch     date,
+  next_step      text,
+  next_step_date date,
+  notes          text,
+  created_by     uuid references founders(user_id),
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now()
+);
+create index contacts_stage_idx on contacts (stage);
+alter table contacts enable row level security;
+create policy contacts_all on contacts for all
+  using (is_founder()) with check (is_founder());
+create trigger contacts_touch before update on contacts
+  for each row execute function set_updated_at();
+
 -- ---------- AGENT MESSAGES (the AI assistant's conversation) ----------
 -- Self-only: each founder's chat with the operating partner is private.
 create table agent_messages (

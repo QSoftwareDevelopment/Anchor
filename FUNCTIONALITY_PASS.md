@@ -76,9 +76,21 @@ New motion primitives in `globals.css`: `qa-pop-in` (modals), `qa-sheet`
   headings, and a spinning halo on the assistant orb. All transform/opacity-based
   and reduced-motion safe.
 
+## Round 3 — Jarvis exec assistant + partnership control center
+
+- **Jarvis hybrid home** ([components/assistant-home.tsx](components/assistant-home.tsx)) — a "Hey {name}" greeting, a **command-center glance** (your focus · your partner · this week + at-risk · upcoming events), and the chat composer all on `/`. Cards link straight to Team / Calendar.
+- **Voice** ([lib/voice.ts](lib/voice.ts)) — a **🔊 Brief me** button speaks a real daily briefing ([/api/brief](app/api/brief/route.ts)); a **🎤 push-to-talk** mic lets you *talk* to the assistant and it talks back. Browser-native by default (zero keys). Add `ELEVENLABS_API_KEY` and it auto-upgrades to premium ElevenLabs audio via [/api/voice](app/api/voice/route.ts) — no code change.
+- **Team view** ([app/team/page.tsx](app/team/page.tsx)) — both founders side by side: today's plan, this week's anchor, shipped count, and open work, with **one-tap hand-off** of any task to the other partner (PATCH `owner`).
+- **Partnership admin** — **Money** ([app/money/page.tsx](app/money/page.tsx): MRR / burn / runway / month-net + ledger), **Contacts** ([app/contacts/page.tsx](app/contacts/page.tsx): CRM with stages + next steps), **Resources** ([app/resources/page.tsx](app/resources/page.tsx): shared links/docs hub). New tables in `MIGRATION_control_center.sql`.
+- **Agent is now the control center** ([lib/agent.ts](lib/agent.ts)) — chief-of-staff/Jarvis voice, sees the partner's day in its snapshot, and gained tools: `get_partner_status`, `update_task(owner)` hand-off, `add_finance_entry`/`get_money_summary`, `add_contact`/`update_contact`/`list_contacts`, `add_resource`/`list_resources`. Ask "what's Aaryan working on?", "give the deck to Aaryan", "log a $120 hosting expense".
+- **Nav + ⌘K** gained a **Partnership** group (Team, Money, Contacts, Resources) and palette quick-actions including **Brief me**.
+
 ## To switch on
 
 1. Run **`MIGRATION_events.sql`** in Supabase (adds `calendar_events`).
-2. Connect Google Calendar from **Settings → Google Calendar** (needs the
+2. Run **`MIGRATION_control_center.sql`** in Supabase (adds `finance_entries`, `resources`, `contacts`).
+3. Connect Google Calendar from **Settings → Google Calendar** (needs the
    `GOOGLE_*` env vars already in `.env.local`, and the redirect URI registered
    in Google Cloud Console).
+4. (Optional) add `ELEVENLABS_API_KEY` for premium voice — the assistant speaks
+   with the browser voice until then, so nothing is blocked.

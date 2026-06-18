@@ -62,3 +62,14 @@ export async function currentFounder(
     .maybeSingle();
   return data ?? null;
 }
+
+// All founders in the workspace (RLS returns every founder to a founder).
+export async function listFounders(
+  supabase: SupabaseClient
+): Promise<{ user_id: string; display_name: string }[]> {
+  const { data } = await supabase
+    .from("founders")
+    .select("user_id, display_name")
+    .order("display_name");
+  return data ?? [];
+}

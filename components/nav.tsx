@@ -20,7 +20,7 @@ type Item = {
   label: string;
   icon: ReactNode;
   exact?: boolean;
-  group: "Workspace" | "Build" | "Reflect" | "Account";
+  group: "Workspace" | "Build" | "Partnership" | "Reflect" | "Account";
   primary?: boolean; // shown in the mobile bottom bar
 };
 
@@ -131,6 +131,53 @@ const ITEMS: Item[] = [
     ),
   },
   {
+    href: "/team",
+    label: "Team",
+    group: "Partnership",
+    icon: I(
+      <>
+        <circle cx="9" cy="8" r="3" />
+        <circle cx="17" cy="9" r="2.2" />
+        <path d="M3.5 20a5.5 5.5 0 0 1 11 0M15 20a4 4 0 0 1 5.5-3.7" />
+      </>
+    ),
+  },
+  {
+    href: "/money",
+    label: "Money",
+    group: "Partnership",
+    icon: I(
+      <>
+        <rect x="2.5" y="6" width="19" height="13" rx="2" />
+        <circle cx="12" cy="12.5" r="2.5" />
+        <path d="M6 6V4.5M18 6V4.5" />
+      </>
+    ),
+  },
+  {
+    href: "/contacts",
+    label: "Contacts",
+    group: "Partnership",
+    icon: I(
+      <>
+        <path d="M4 4h16v16H4z" />
+        <circle cx="12" cy="10" r="2.5" />
+        <path d="M8 16a4 4 0 0 1 8 0M2 8h2M2 12h2M2 16h2" />
+      </>
+    ),
+  },
+  {
+    href: "/resources",
+    label: "Resources",
+    group: "Partnership",
+    icon: I(
+      <>
+        <path d="M4 5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" />
+        <path d="M13 3v5h5M8 13h8M8 17h5" />
+      </>
+    ),
+  },
+  {
     href: "/review",
     label: "Review",
     group: "Reflect",
@@ -161,7 +208,7 @@ const ITEMS: Item[] = [
   },
 ];
 
-const GROUPS = ["Workspace", "Build", "Reflect", "Account"] as const;
+const GROUPS = ["Workspace", "Build", "Partnership", "Reflect", "Account"] as const;
 
 const signOutIcon = I(
   <>

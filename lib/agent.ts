@@ -18,7 +18,7 @@ const MAX_TOKENS = 2048;
 const MAX_STEPS = 8; // tool-loop ceiling
 
 export type Founder = { user_id: string; display_name: string };
-export type AgentContext = { supabase: SupabaseClient; founder: Founder; now: Date };
+export type AgentContext = { supabase: SupabaseClient; founder: Founder; now: Date; founders: Founder[] };
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 export type AgentAction = { kind: string; label: string; detail?: string };
 
@@ -88,7 +88,7 @@ const TOOLS = [
   {
     name: "update_task",
     description:
-      "Update a task by id. Set status to 'done' to complete, 'killed' to kill it (a decision, not a failure). Can move it (week_assigned/due_date), resize it (estimate_minutes), or make it an anchor.",
+      "Update a task by id. Set status to 'done' to complete, 'killed' to kill it (a decision, not a failure). Can move it (week_assigned/due_date), resize it (estimate_minutes), make it an anchor, or HAND IT OFF to the other founder by setting owner to their user_id (the founders list is in the snapshot).",
     input_schema: {
       type: "object",
       properties: {
@@ -100,6 +100,7 @@ const TOOLS = [
         due_date: { type: "string" },
         week_assigned: { type: "string" },
         is_anchor: { type: "boolean" },
+        owner: { type: "string", description: "founder user_id — reassign/hand off the task to that founder" },
       },
       required: ["task_id"],
     },
@@ -213,6 +214,94 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: "get_partner_status",
+    description:
+      "Get the OTHER founder's current state — their #1 today, today's scheduled blocks, this week's anchor, what they've shipped, and how many open tasks they carry. Use when asked 'what is <partner> working on / up to' or before handing work to them.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "add_finance_entry",
+    description:
+      "Record money: an 'income' or 'expense', or a 'balance' snapshot (current cash on hand). Set recurring=true for things that repeat monthly (powers MRR and burn). Use for 'log a $120 hosting expense', 'we got a $500 client', 'cash on hand is 9000'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        kind: { type: "string", enum: ["income", "expense", "balance"] },
+        amount: { type: "number" },
+        description: { type: "string" },
+        category: { type: "string" },
+        recurring: { type: "boolean", description: "true if it repeats monthly" },
+      },
+      required: ["kind", "amount"],
+    },
+  },
+  {
+    name: "get_money_summary",
+    description: "The partnership's money snapshot: this month's income/expense/net, MRR, monthly burn, cash on hand, and runway in months.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "add_contact",
+    description: "Add a client or lead to the CRM. Stage is one of lead/active/client/dormant/lost.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        company: { type: "string" },
+        email: { type: "string" },
+        phone: { type: "string" },
+        stage: { type: "string", enum: ["lead", "active", "client", "dormant", "lost"] },
+        next_step: { type: "string" },
+        next_step_date: { type: "string", description: "YYYY-MM-DD" },
+        notes: { type: "string" },
+      },
+      required: ["name"],
+    },
+  },
+  {
+    name: "list_contacts",
+    description: "List CRM contacts, optionally filtered by stage.",
+    input_schema: {
+      type: "object",
+      properties: { stage: { type: "string", enum: ["lead", "active", "client", "dormant", "lost"] } },
+    },
+  },
+  {
+    name: "update_contact",
+    description: "Update a contact by id — move their stage, set the next step, log a touch.",
+    input_schema: {
+      type: "object",
+      properties: {
+        contact_id: { type: "string" },
+        stage: { type: "string", enum: ["lead", "active", "client", "dormant", "lost"] },
+        next_step: { type: "string" },
+        next_step_date: { type: "string" },
+        last_touch: { type: "string", description: "YYYY-MM-DD" },
+        notes: { type: "string" },
+      },
+      required: ["contact_id"],
+    },
+  },
+  {
+    name: "add_resource",
+    description: "Save a shared link/doc to the resources hub (contracts, dashboards, brand assets). Links only — never passwords or secrets.",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        url: { type: "string" },
+        category: { type: "string", enum: ["link", "contract", "dashboard", "brand", "doc"] },
+        notes: { type: "string" },
+      },
+      required: ["title"],
+    },
+  },
+  {
+    name: "list_resources",
+    description: "List the shared resources/links hub.",
+    input_schema: { type: "object", properties: {} },
+  },
 ];
 
 // ============================================================
@@ -290,14 +379,18 @@ async function dispatchTool(
       const id = s("task_id");
       if (!id) return { result: { error: "task_id required" } };
       const patch: Record<string, unknown> = {};
-      for (const k of ["title", "status", "energy", "due_date", "week_assigned"]) if (k in input) patch[k] = input[k];
+      for (const k of ["title", "status", "energy", "due_date", "week_assigned", "owner"]) if (k in input) patch[k] = input[k];
       if ("estimate_minutes" in input) patch.estimate_minutes = n("estimate_minutes");
       if ("is_anchor" in input) patch.is_anchor = b("is_anchor");
       if (patch.status === "done") patch.completed_at = now.toISOString();
       if (patch.status && patch.status !== "done") patch.completed_at = null;
       const { data, error } = await supabase.from("tasks").update(patch).eq("id", id).select("id, title, status").single();
       if (error) return { result: { error: error.message } };
-      const verb = data.status === "done" ? "Completed" : data.status === "killed" ? "Killed" : "Updated";
+      let verb = data.status === "done" ? "Completed" : data.status === "killed" ? "Killed" : "Updated";
+      if ("owner" in patch) {
+        const to = ctx.founders.find((f) => f.user_id === patch.owner)?.display_name;
+        verb = to ? `Handed to ${to}` : "Reassigned";
+      }
       return { result: data, action: { kind: "task", label: `${verb} task`, detail: data.title } };
     }
     case "list_projects": {
@@ -496,6 +589,129 @@ async function dispatchTool(
       const { data, error } = await q.limit(50);
       return { result: error ? { error: error.message } : data };
     }
+    case "get_partner_status": {
+      const partner = ctx.founders.find((f) => f.user_id !== founder.user_id);
+      if (!partner) return { result: { error: "no partner in this workspace" } };
+      const monday = mondayOf(now);
+      const [{ data: blocks }, { data: anchor }, { count: shipped }, { count: open }] = await Promise.all([
+        supabase.from("schedule_blocks").select("start_at, tasks(title, is_anchor, status)").eq("founder_id", partner.user_id).eq("block_date", todayISO()).order("start_at"),
+        supabase.from("anchor_commitments").select("commitment").eq("founder_id", partner.user_id).eq("week_start", monday).maybeSingle(),
+        supabase.from("tasks").select("id", { count: "exact", head: true }).eq("owner", partner.user_id).eq("status", "done").gte("completed_at", `${monday}T00:00:00`),
+        supabase.from("tasks").select("id", { count: "exact", head: true }).eq("owner", partner.user_id).in("status", ["planned", "scheduled"]),
+      ]);
+      const today = (blocks ?? []).map((blk) => {
+        const t = Array.isArray(blk.tasks) ? blk.tasks[0] : blk.tasks;
+        return `${fmtTime(blk.start_at)} ${t?.title ?? "—"}${t?.is_anchor ? " (anchor)" : ""}${t?.status === "done" ? " ✓" : ""}`;
+      });
+      return {
+        result: {
+          partner: partner.display_name,
+          partner_id: partner.user_id,
+          anchor_this_week: anchor?.commitment ?? null,
+          shipped_this_week: shipped ?? 0,
+          open_tasks: open ?? 0,
+          today_schedule: today,
+        },
+      };
+    }
+    case "add_finance_entry": {
+      const kind = s("kind");
+      const amount = n("amount");
+      if (!kind || amount == null) return { result: { error: "kind and amount required" } };
+      const { data, error } = await supabase
+        .from("finance_entries")
+        .insert({
+          kind,
+          amount: Math.abs(amount),
+          category: s("category") ?? "general",
+          description: s("description") ?? null,
+          recurring: b("recurring") ?? false,
+          created_by: founder.user_id,
+        })
+        .select("id, kind, amount, description")
+        .single();
+      if (error) return { result: { error: error.message } };
+      const sign = kind === "expense" ? "-" : kind === "income" ? "+" : "";
+      return {
+        result: data,
+        action: { kind: "money", label: kind === "balance" ? "Logged balance" : `Logged ${kind}`, detail: `${sign}$${Math.abs(amount)}${s("description") ? ` · ${s("description")}` : ""}` },
+      };
+    }
+    case "get_money_summary": {
+      const { data } = await supabase.from("finance_entries").select("kind, amount, recurring, occurred_on");
+      const rows = (data ?? []) as { kind: string; amount: number; recurring: boolean; occurred_on: string }[];
+      const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+      let incomeMonth = 0, expenseMonth = 0, mrr = 0, burn = 0, latestBalance: number | null = null, latestDate = "";
+      for (const e of rows) {
+        const amt = Number(e.amount);
+        if (e.kind === "income") { if (e.occurred_on >= monthStart) incomeMonth += amt; if (e.recurring) mrr += amt; }
+        else if (e.kind === "expense") { if (e.occurred_on >= monthStart) expenseMonth += amt; if (e.recurring) burn += amt; }
+        else if (e.kind === "balance" && e.occurred_on >= latestDate) { latestBalance = amt; latestDate = e.occurred_on; }
+      }
+      return {
+        result: {
+          income_this_month: incomeMonth,
+          expense_this_month: expenseMonth,
+          net_this_month: incomeMonth - expenseMonth,
+          mrr,
+          monthly_burn: burn,
+          cash_on_hand: latestBalance,
+          runway_months: latestBalance != null && burn > 0 ? Math.round((latestBalance / burn) * 10) / 10 : null,
+        },
+      };
+    }
+    case "add_contact": {
+      const name = s("name");
+      if (!name) return { result: { error: "name required" } };
+      const { data, error } = await supabase
+        .from("contacts")
+        .insert({
+          name,
+          company: s("company") ?? null,
+          email: s("email") ?? null,
+          phone: s("phone") ?? null,
+          stage: s("stage") ?? "lead",
+          next_step: s("next_step") ?? null,
+          next_step_date: s("next_step_date") ?? null,
+          notes: s("notes") ?? null,
+          owner: founder.user_id,
+          created_by: founder.user_id,
+        })
+        .select("id, name, stage")
+        .single();
+      if (error) return { result: { error: error.message } };
+      return { result: data, action: { kind: "contact", label: "Added contact", detail: `${data.name} · ${data.stage}` } };
+    }
+    case "list_contacts": {
+      let q = supabase.from("contacts").select("id, name, company, stage, next_step, next_step_date");
+      if (s("stage")) q = q.eq("stage", s("stage")!);
+      const { data, error } = await q.limit(100);
+      return { result: error ? { error: error.message } : data };
+    }
+    case "update_contact": {
+      const id = s("contact_id");
+      if (!id) return { result: { error: "contact_id required" } };
+      const patch: Record<string, unknown> = {};
+      for (const k of ["stage", "next_step", "next_step_date", "last_touch", "notes"]) if (k in input) patch[k] = input[k];
+      const { data, error } = await supabase.from("contacts").update(patch).eq("id", id).select("id, name, stage").single();
+      if (error) return { result: { error: error.message } };
+      return { result: data, action: { kind: "contact", label: "Updated contact", detail: `${data.name} · ${data.stage}` } };
+    }
+    case "add_resource": {
+      const title = s("title");
+      if (!title) return { result: { error: "title required" } };
+      const { data, error } = await supabase
+        .from("resources")
+        .insert({ title, url: s("url") ?? null, category: s("category") ?? "link", notes: s("notes") ?? null, created_by: founder.user_id })
+        .select("id, title, category")
+        .single();
+      if (error) return { result: { error: error.message } };
+      return { result: data, action: { kind: "resource", label: "Saved resource", detail: data.title } };
+    }
+    case "list_resources": {
+      const { data, error } = await supabase.from("resources").select("id, title, url, category").order("created_at", { ascending: false }).limit(100);
+      return { result: error ? { error: error.message } : data };
+    }
     default:
       return { result: { error: `unknown tool ${name}` } };
   }
@@ -505,16 +721,25 @@ async function dispatchTool(
 // CONTEXT SNAPSHOT + SYSTEM PROMPT
 // ============================================================
 async function loadSnapshot(ctx: AgentContext): Promise<string> {
-  const { supabase, founder, now } = ctx;
+  const { supabase, founder, now, founders } = ctx;
   const today = todayISO();
   const monday = mondayOf(now);
-  const [{ data: blocks }, { data: openTasks }, { data: goals }, { data: projects }, { data: profile }] =
+  const partner = founders.find((f) => f.user_id !== founder.user_id) ?? null;
+
+  const [{ data: blocks }, { data: openTasks }, { data: goals }, { data: projects }, { data: profile }, { data: partnerBlocks }, { data: anchors }, { count: partnerOpen }] =
     await Promise.all([
       supabase.from("schedule_blocks").select("start_at, end_at, tasks(title, is_anchor, status)").eq("founder_id", founder.user_id).eq("block_date", today).order("start_at"),
       supabase.from("tasks").select("id, title, status, estimate_minutes, energy, is_anchor, week_assigned").eq("owner", founder.user_id).in("status", ["planned", "scheduled"]).limit(40),
       supabase.from("goals").select("id, outcome, quarter, target_date, status").eq("status", "active"),
       supabase.from("projects").select("id, name, status").eq("status", "active"),
       supabase.from("founder_profiles").select("daily_ceiling_minutes, timezone").eq("user_id", founder.user_id).maybeSingle(),
+      partner
+        ? supabase.from("schedule_blocks").select("start_at, tasks(title, is_anchor, status)").eq("founder_id", partner.user_id).eq("block_date", today).order("start_at")
+        : Promise.resolve({ data: [] }),
+      supabase.from("anchor_commitments").select("founder_id, commitment").eq("week_start", monday),
+      partner
+        ? supabase.from("tasks").select("id", { count: "exact", head: true }).eq("owner", partner.user_id).in("status", ["planned", "scheduled"])
+        : Promise.resolve({ count: 0 }),
     ]);
 
   const todayBlocks = (blocks ?? []).map((blk) => {
@@ -525,25 +750,52 @@ async function loadSnapshot(ctx: AgentContext): Promise<string> {
   const goalLines = (goals ?? []).map((g) => `- [${g.id}] ${g.outcome} (${g.quarter}, due ${g.target_date})`);
   const projLines = (projects ?? []).map((p) => `- [${p.id}] ${p.name}`);
 
+  // Partner block — so the agent knows what the other founder is doing and can hand off / reference.
+  let partnerSection = "";
+  if (partner) {
+    const pBlocks = ((partnerBlocks as { start_at: string; tasks: unknown }[]) ?? []).map((blk) => {
+      const t = Array.isArray(blk.tasks) ? blk.tasks[0] : blk.tasks;
+      const tt = t as { title?: string; is_anchor?: boolean; status?: string } | null;
+      return `${fmtTime(blk.start_at)} ${tt?.title ?? "—"}${tt?.is_anchor ? " (anchor)" : ""}${tt?.status === "done" ? " ✓" : ""}`;
+    });
+    const pAnchor = (anchors ?? []).find((a) => a.founder_id === partner.user_id)?.commitment;
+    partnerSection =
+      `\nPARTNER — ${partner.display_name} (user_id ${partner.user_id}):\n` +
+      `Anchor this week: ${pAnchor ?? "(none set)"}\n` +
+      `Open tasks: ${partnerOpen ?? 0}\n` +
+      `Their day today:\n${pBlocks.length ? pBlocks.join("\n") : "(nothing scheduled)"}`;
+  }
+
+  const roster = founders.map((f) => `- ${f.display_name}: ${f.user_id}${f.user_id === founder.user_id ? " (you)" : ""}`).join("\n");
+
   return [
     `Today is ${today} (week of ${monday}). Daily ceiling: ${profile?.daily_ceiling_minutes ?? 300} min. Timezone: ${profile?.timezone ?? "America/Toronto"}.`,
-    `\nTODAY'S SCHEDULE:\n${todayBlocks.length ? todayBlocks.join("\n") : "(nothing scheduled yet)"}`,
-    `\nOPEN TASKS (id in brackets):\n${tasks.length ? tasks.join("\n") : "(none)"}`,
+    `\nFOUNDERS (use these ids to hand off work):\n${roster}`,
+    `\nTODAY'S SCHEDULE (yours):\n${todayBlocks.length ? todayBlocks.join("\n") : "(nothing scheduled yet)"}`,
+    `\nYOUR OPEN TASKS (id in brackets):\n${tasks.length ? tasks.join("\n") : "(none)"}`,
+    partnerSection,
     `\nACTIVE GOALS:\n${goalLines.length ? goalLines.join("\n") : "(none)"}`,
     `\nACTIVE PROJECTS:\n${projLines.length ? projLines.join("\n") : "(none — a General project will be created on first task)"}`,
   ].join("\n");
 }
 
 function systemPrompt(ctx: AgentContext, snapshot: string): string {
-  return `You are the operating partner for Q Software — a two-founder startup run by Sid and Aaryan. You are talking with ${ctx.founder.display_name}. You are not a chatbot or a cheerleader; you are the sharp third person in the room who keeps the plan honest and the calendar realistic, and who actually does the work when asked.
+  const partner = ctx.founders.find((f) => f.user_id !== ctx.founder.user_id);
+  return `You are Anchor — the executive assistant and chief of staff for Q Software, a two-founder startup run by Sid and Aaryan. You are talking with ${ctx.founder.display_name}${partner ? `; their partner is ${partner.display_name}` : ""}. Think of yourself as their Jarvis: always briefed, proactive, discreet, and genuinely capable. You are not a chatbot or a cheerleader — you run the operation alongside them and actually do the work when asked.
 
-You have tools. USE THEM to take real action — don't describe what you would do, do it. When ${ctx.founder.display_name} asks you to plan the day or week, actually call plan_day / plan_week. When they mention something to do, create the task. When they name a meeting, call, or appointment at a specific time ("dentist Friday 2pm", "investor call tomorrow at 10"), call add_calendar_event so it lands on their real Google Calendar. When they want to know where time is going, call get_insights. Prefer acting over asking; ask at most one short clarifying question, and only when you genuinely can't proceed.
+You are the control center for the whole partnership: the plan and calendar, what each founder is doing, the money, the clients, and the shared resources. USE YOUR TOOLS to take real action — don't describe what you'd do, do it:
+- Planning: plan_day / plan_week (real scheduler, never past the daily ceiling); create_task when they mention something to do.
+- Calendar: add_calendar_event for any meeting/call/appointment at a time ("investor call tomorrow at 10") so it lands on their real Google Calendar.
+- The partnership: get_partner_status to see what ${partner ? partner.display_name : "the other founder"} is doing; hand work off with update_task's owner field when they say "give this to ${partner ? partner.display_name : "them"}".
+- Admin: add_finance_entry / get_money_summary for money ("log a $120 hosting expense", "cash on hand is 9000"); add_contact / update_contact / list_contacts for clients & leads; add_resource / list_resources for shared links and docs.
+- Reflection: get_insights for where time is going.
+Prefer acting over asking; ask at most one short clarifying question, and only when you genuinely can't proceed.
 
 VOICE:
-- Warm but crisp. Lead with the point. Short paragraphs, plain language. No corporate filler, no AI-speak ("I'd be happy to", "Great question").
-- Address ${ctx.founder.display_name} by name occasionally, naturally — not every line.
-- Never expose tool names, ids, JSON, or internal mechanics. Speak like a brilliant chief of staff.
-- After you act, confirm what you did in one or two human sentences, then offer the obvious next step.
+- Warm, sharp, and a little anticipatory — like a great chief of staff who already pulled the file. Lead with the point. Short paragraphs, plain language. No corporate filler, no AI-speak ("I'd be happy to", "Great question").
+- Open by name when it's natural ("Hey ${ctx.founder.display_name}…") but don't overuse it.
+- Your replies may be read aloud, so write clean spoken sentences — no markdown tables, no raw ids, no JSON.
+- Never expose tool names or internal mechanics. After you act, confirm what you did in one or two human sentences, then offer the obvious next step.
 
 PRINCIPLES (hard rules):
 - Progress first. Open with what moved before what slipped.
@@ -562,8 +814,11 @@ Use the ids above when updating or planning. If a project is needed and none fit
 // ============================================================
 export async function runAgent(
   history: ChatMessage[],
-  ctx: AgentContext
+  base: Omit<AgentContext, "founders">
 ): Promise<{ text: string; actions: AgentAction[] }> {
+  // Load the founder roster once so the agent can name + hand off between partners.
+  const { data: foundersData } = await base.supabase.from("founders").select("user_id, display_name");
+  const ctx: AgentContext = { ...base, founders: (foundersData as Founder[]) ?? [] };
   const snapshot = await loadSnapshot(ctx);
   const system = systemPrompt(ctx, snapshot);
   const messages: ApiMessage[] = history.map((m) => ({ role: m.role, content: m.content }));

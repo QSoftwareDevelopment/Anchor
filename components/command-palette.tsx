@@ -10,6 +10,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import EventModal, { type CreatedEvent } from "@/components/event-modal";
+import { speakSmart } from "@/lib/voice";
 
 type Cmd = {
   id: string;
@@ -90,8 +91,13 @@ export default function CommandPalette() {
       { id: "inbox", label: "Inbox", group: "Go to", keywords: "captures triage", icon: ic(<><path d="M3 13h4l1.5 3h7L17 13h4" /><path d="M5 13V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v7" /></>), run: () => go("/inbox") },
       { id: "review", label: "Review", group: "Go to", keywords: "daily weekly reflect", icon: ic(<><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v4h-4" /></>), run: () => go("/review") },
       { id: "insights", label: "Insights", group: "Go to", keywords: "stats time data analytics", icon: ic(<path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />), run: () => go("/insights") },
+      { id: "team", label: "Team", group: "Go to", keywords: "partner aaryan sid partnership who", icon: ic(<><circle cx="9" cy="8" r="3" /><circle cx="17" cy="9" r="2" /><path d="M3.5 20a5.5 5.5 0 0 1 11 0" /></>), run: () => go("/team") },
+      { id: "money", label: "Money", group: "Go to", keywords: "finance revenue expense mrr runway burn", icon: ic(<><rect x="2.5" y="6" width="19" height="13" rx="2" /><circle cx="12" cy="12.5" r="2.5" /></>), run: () => go("/money") },
+      { id: "contacts", label: "Contacts", group: "Go to", keywords: "crm clients leads", icon: ic(<><rect x="4" y="4" width="16" height="16" rx="1" /><circle cx="12" cy="10" r="2.5" /></>), run: () => go("/contacts") },
+      { id: "resources", label: "Resources", group: "Go to", keywords: "links docs contracts brand dashboards", icon: ic(<><path d="M4 5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /></>), run: () => go("/resources") },
       { id: "settings", label: "Settings", group: "Go to", keywords: "profile calendar energy ceiling", icon: ic(<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87M4.6 9a1.7 1.7 0 0 0-.34-1.87" /></>), run: () => go("/settings") },
 
+      { id: "brief", label: "Brief me", hint: "spoken", group: "Actions", keywords: "voice speak jarvis briefing status read aloud", icon: ic(<><path d="M11 5 6 9H2v6h4l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14" /></>), run: () => { close(); fetch("/api/brief").then((r) => r.json()).then((d) => { if (d?.text) void speakSmart(d.text); }).catch(() => {}); } },
       { id: "new-event", label: "Add calendar event", hint: "meeting · call", group: "Actions", keywords: "create meeting appointment gcal new", icon: ic(<><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 9h18M12 13v4M10 15h4" /></>), run: () => { setOpen(false); fetch("/api/gcal/status").then((r) => r.json()).then((d) => setGcal(Boolean(d.connected))).catch(() => {}); setEventOpen(true); } },
       { id: "capture", label: "Capture a thought", hint: "to inbox", group: "Actions", keywords: "note idea brain dump todo", icon: ic(<><path d="M12 5v14M5 12h14" /></>), run: () => { setMode("capture"); setQuery(""); setActive(0); setTimeout(() => inputRef.current?.focus(), 10); } },
       { id: "plan-day", label: "Plan my day", group: "Actions", keywords: "schedule today blocks", icon: ic(<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>), run: () => plan("day") },
