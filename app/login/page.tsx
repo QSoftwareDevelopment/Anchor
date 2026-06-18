@@ -83,11 +83,11 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-7 flex items-center gap-2.5">
           <span className="grid h-9 w-9 place-items-center rounded-qa-sm bg-qa-accent font-mono text-base font-bold text-qa-accent-text">
-            Q
+            A
           </span>
           <div className="leading-tight">
-            <p className="font-semibold">Q Software</p>
-            <p className="text-xs text-qa-text-2">The operating room · Sid &amp; Aaryan only</p>
+            <p className="font-semibold">Anchor OS</p>
+            <p className="text-xs text-qa-text-2">Executive assistant · Sid &amp; Aaryan only</p>
           </div>
         </div>
 

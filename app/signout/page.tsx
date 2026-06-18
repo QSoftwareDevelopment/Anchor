@@ -48,7 +48,7 @@ export default function SignOutPage() {
             className="grid h-14 w-14 place-items-center rounded-2xl font-mono text-xl font-bold text-white"
             style={{ background: "var(--qa-grad)", boxShadow: "var(--qa-glow)" }}
           >
-            Q
+            A
           </span>
         </div>
 
@@ -56,7 +56,7 @@ export default function SignOutPage() {
           <>
             <h1 className="text-2xl font-[650]">You&apos;re signed out</h1>
             <p className="mt-2 text-sm text-qa-text-2">
-              Your session ended on this device. The operating room is locked until you sign back in.
+              Your session ended on this device. Anchor OS is locked until you sign back in.
             </p>
             <Link href="/login" className="qa-btn qa-btn-primary mt-6 inline-flex w-full justify-center py-2.5">
               Sign back in

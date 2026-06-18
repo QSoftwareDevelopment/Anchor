@@ -32,6 +32,7 @@ export async function GET(req: Request) {
   let q = supabase
     .from("calendar_events")
     .select("id, title, start_at, end_at, all_day, location, notes, category, gcal_event_id")
+    .eq("founder_id", founder.user_id)
     .order("start_at");
   if (from) q = q.gte("start_at", from);
   if (to) q = q.lte("start_at", to);
@@ -56,6 +57,12 @@ export async function POST(req: Request) {
   const end = body.end_at
     ? new Date(body.end_at)
     : new Date(start.getTime() + (body.all_day ? 24 : 1) * 3_600_000);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return NextResponse.json({ error: "invalid event time" }, { status: 400 });
+  }
+  if (!body.all_day && end <= start) {
+    return NextResponse.json({ error: "end_at must be after start_at" }, { status: 400 });
+  }
 
   const { data: inserted, error } = await supabase
     .from("calendar_events")
@@ -76,6 +83,7 @@ export async function POST(req: Request) {
 
   // Best-effort Google Calendar sync.
   let synced = false;
+  let gcalEventId: string | null = null;
   const { data: tokenRow } = await supabase
     .from("gcal_tokens")
     .select("refresh_token, calendar_id")
@@ -102,11 +110,12 @@ export async function POST(req: Request) {
         profile?.timezone ?? "America/Toronto"
       );
       await supabase.from("calendar_events").update({ gcal_event_id: gcalId }).eq("id", inserted.id);
+      gcalEventId = gcalId;
       synced = true;
     } catch {
       // event is saved locally even if the push fails
     }
   }
 
-  return NextResponse.json({ event: inserted, synced });
+  return NextResponse.json({ event: { ...inserted, gcal_event_id: gcalEventId }, synced });
 }

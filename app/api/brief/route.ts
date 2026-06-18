@@ -10,6 +10,8 @@ export const dynamic = "force-dynamic";
 type Blk = { start_at: string; tasks: { title: string; is_anchor: boolean; status: string } | null };
 const one = (b: Blk[]) =>
   b.find((x) => x.tasks?.is_anchor && x.tasks.status !== "done") ?? b.find((x) => x.tasks?.status !== "done");
+const eventDate = (iso: string, allDay: boolean) =>
+  new Date(allDay ? `${iso.slice(0, 10)}T00:00:00` : iso).toLocaleDateString("en-CA", { month: "short", day: "numeric" });
 
 export async function GET() {
   const supabase = createServerSupabase();
@@ -32,7 +34,7 @@ export async function GET() {
       partner
         ? supabase.from("tasks").select("id", { count: "exact", head: true }).eq("owner", partner.user_id).eq("status", "done").gte("completed_at", `${monday}T00:00:00`)
         : Promise.resolve({ count: 0 }),
-      supabase.from("calendar_events").select("title, start_at, all_day").gte("start_at", nowISO).order("start_at").limit(1),
+      supabase.from("calendar_events").select("title, start_at, all_day").eq("founder_id", founder.user_id).gte("start_at", nowISO).order("start_at").limit(1),
       supabase.from("tasks").select("id", { count: "exact", head: true }).eq("owner", founder.user_id).gte("slip_count", 2).in("status", ["planned", "scheduled"]),
     ]);
 
@@ -54,7 +56,11 @@ export async function GET() {
 
   const ev = (events as { title: string; start_at: string; all_day: boolean }[] | null)?.[0];
   if (ev) {
-    const when = ev.all_day ? "today" : new Date(ev.start_at).toDateString() === new Date().toDateString() ? `at ${formatTime(ev.start_at)}` : "coming up";
+    const when = ev.all_day
+      ? `on ${eventDate(ev.start_at, true)}`
+      : new Date(ev.start_at).toDateString() === new Date().toDateString()
+        ? `at ${formatTime(ev.start_at)}`
+        : `on ${eventDate(ev.start_at, false)}`;
     parts.push(`Next on the calendar: ${ev.title} ${when}.`);
   }
 

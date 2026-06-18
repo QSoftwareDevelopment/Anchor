@@ -27,12 +27,27 @@ type Ev = {
   notes: string | null;
   category?: string;
 };
+type GcalState = {
+  connected: boolean;
+  configured?: boolean;
+  calendar_id: string | null;
+  connected_at: string | null;
+};
 
 const supabase = createBrowserSupabase();
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function isoDate(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function dayStartISO(key: string) {
+  return new Date(`${key}T00:00:00`).toISOString();
+}
+function dayEndISO(key: string) {
+  return new Date(`${key}T23:59:59`).toISOString();
+}
+function eventDayKey(ev: Pick<Ev, "start_at" | "all_day">) {
+  return ev.all_day ? ev.start_at.slice(0, 10) : isoDate(new Date(ev.start_at));
 }
 
 export default function CalendarPage() {
@@ -49,7 +64,8 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Ev | null>(null);
-  const [gcal, setGcal] = useState(false);
+  const [gcal, setGcal] = useState<GcalState | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
   // 6-week grid starting from the Monday on/before the 1st
   const gridStart = useMemo(() => {
@@ -83,7 +99,7 @@ export default function CalendarPage() {
           .gte("block_date", rangeStart)
           .lte("block_date", rangeEnd)
           .order("start_at"),
-        fetch(`/api/events?from=${rangeStart}T00:00:00&to=${rangeEnd}T23:59:59`).then((r) => r.json()).catch(() => ({ events: [] })),
+        fetch(`/api/events?from=${encodeURIComponent(dayStartISO(rangeStart))}&to=${encodeURIComponent(dayEndISO(rangeEnd))}`).then((r) => r.json()).catch(() => ({ events: [] })),
       ]);
       setBlocks((blk as unknown as Block[]) ?? []);
       setEvents((evRes.events as Ev[]) ?? []);
@@ -92,15 +108,29 @@ export default function CalendarPage() {
     [rangeStart, rangeEnd]
   );
 
+  const loadGcalStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/gcal/status").then((r) => r.json());
+      setGcal({
+        connected: Boolean(res.connected),
+        configured: res.configured !== false,
+        calendar_id: res.calendar_id ?? null,
+        connected_at: res.connected_at ?? null,
+      });
+    } catch {
+      setGcal({ connected: false, configured: false, calendar_id: null, connected_at: null });
+    }
+  }, []);
+
   useEffect(() => {
     (async () => {
       const { data: auth } = await supabase.auth.getUser();
       const uid = auth.user?.id;
       if (!uid) return setLoading(false);
       setMe(uid);
-      fetch("/api/gcal/status").then((r) => r.json()).then((d) => setGcal(Boolean(d.connected))).catch(() => {});
+      void loadGcalStatus();
     })();
-  }, []);
+  }, [loadGcalStatus]);
 
   useEffect(() => {
     if (me) void load(me);
@@ -114,19 +144,21 @@ export default function CalendarPage() {
 
   function countFor(key: string) {
     const b = blocks.filter((x) => x.block_date === key).length;
-    const e = events.filter((x) => x.start_at.slice(0, 10) === key).length;
+    const e = events.filter((x) => eventDayKey(x) === key).length;
     return { b, e, total: b + e };
   }
 
   function onCreated(ev: CreatedEvent, synced: boolean) {
     setEvents((es) => [...es, ev as Ev].sort((a, b) => a.start_at.localeCompare(b.start_at)));
-    void synced;
+    setNote(syncMessage("created", synced, Boolean(gcal?.connected)));
   }
-  function onUpdated(ev: CreatedEvent) {
+  function onUpdated(ev: CreatedEvent, synced: boolean) {
     setEvents((es) => es.map((e) => (e.id === ev.id ? (ev as Ev) : e)).sort((a, b) => a.start_at.localeCompare(b.start_at)));
+    setNote(syncMessage("updated", synced, Boolean(gcal?.connected)));
   }
   function onDeleted(id: string) {
     setEvents((es) => es.filter((e) => e.id !== id));
+    setNote("Event deleted.");
   }
   function openNew() {
     setEditing(null);
@@ -142,7 +174,7 @@ export default function CalendarPage() {
 
   const selDate = new Date(selected + "T00:00:00");
   const selBlocks = blocks.filter((b) => b.block_date === selected);
-  const selEvents = events.filter((e) => e.start_at.slice(0, 10) === selected);
+  const selEvents = events.filter((e) => eventDayKey(e) === selected);
   const selItems = [
     ...selEvents.map((e) => ({ kind: "event" as const, sort: e.start_at, e })),
     ...selBlocks.map((b) => ({ kind: "block" as const, sort: b.start_at, b })),
@@ -176,9 +208,42 @@ export default function CalendarPage() {
               <Chevron dir="right" />
             </button>
           </div>
+          <button
+            onClick={() => {
+              if (me) void load(me);
+              void loadGcalStatus();
+              setNote("Calendar refreshed.");
+            }}
+            className="qa-btn qa-btn-ghost text-sm"
+          >
+            Refresh
+          </button>
           <button onClick={openNew} className="qa-btn qa-btn-primary text-sm">
             + Event
           </button>
+        </div>
+      </div>
+
+      <div className="qa-hud-panel mt-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div className="min-w-0">
+          <p className="qa-eyebrow text-qa-accent">Calendar sync</p>
+          <p className="mt-1 text-sm text-qa-text-2">
+            {gcal == null
+              ? "Checking Google Calendar..."
+              : gcal.connected
+                ? `Connected to ${gcal.calendar_id ?? "Google Calendar"}. Events and planned work sync from Anchor.`
+                : gcal.configured === false
+                  ? "Google Calendar OAuth is not configured yet."
+                  : "Not connected. Events save in Anchor until you connect Google Calendar."}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {note && <span className="text-sm text-qa-accent qa-fade" role="status">{note}</span>}
+          {gcal?.connected ? (
+            <LinkPill href="/settings" label="Manage sync" />
+          ) : (
+            <LinkPill href="/api/gcal/connect" label="Connect Google" />
+          )}
         </div>
       </div>
 
@@ -294,9 +359,24 @@ export default function CalendarPage() {
         onDeleted={onDeleted}
         event={editing as CreatedEvent | null}
         defaultDate={editing ? undefined : selected}
-        gcalConnected={gcal}
+        gcalConnected={Boolean(gcal?.connected)}
       />
     </div>
+  );
+}
+
+function syncMessage(action: "created" | "updated", synced: boolean, connected: boolean) {
+  const verb = action === "created" ? "added" : "updated";
+  if (synced) return `Event ${verb} and synced to Google Calendar.`;
+  if (connected) return `Event ${verb} in Anchor. Google sync needs attention.`;
+  return `Event ${verb} in Anchor. Connect Google Calendar to sync future events.`;
+}
+
+function LinkPill({ href, label }: { href: string; label: string }) {
+  return (
+    <a href={href} className="rounded-full border border-qa-line-strong bg-qa-glass px-3 py-1.5 text-sm font-semibold text-qa-text-2 transition-colors hover:border-qa-accent hover:text-qa-accent">
+      {label}
+    </a>
   );
 }
 

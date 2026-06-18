@@ -126,15 +126,26 @@ export type GcalEventInput = {
   description?: string;
 };
 
+function zonedParts(d: Date, timezone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(d);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
+  return {
+    date: `${get("year")}-${get("month")}-${get("day")}`,
+    dateTime: `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:${get("second")}`,
+  };
+}
+
 function eventBody(ev: GcalEventInput, timezone: string) {
-  // Stored instants hold the founder's wall-clock as UTC digits, so we read
-  // the UTC face of the Date and let Google's `timeZone` resolve it.
-  const dateOnly = (d: Date) => d.toISOString().slice(0, 10); // YYYY-MM-DD
-  // Timezone-naive local datetime (no trailing Z). Sending a UTC `Z` here would
-  // make Google treat it as an absolute instant and use `timeZone` for display
-  // only — shifting the event by the UTC offset. A naive string + timeZone makes
-  // Google interpret the wall-clock in the founder's zone (the correct behavior).
-  const naive = (d: Date) => d.toISOString().slice(0, 19); // YYYY-MM-DDTHH:mm:ss
+  const dateOnly = (d: Date) => d.toISOString().slice(0, 10); // all-day events preserve the chosen date
 
   let when;
   if (ev.allDay) {
@@ -148,8 +159,8 @@ function eventBody(ev: GcalEventInput, timezone: string) {
     when = { start: { date: startDate }, end: { date: endDate } };
   } else {
     when = {
-      start: { dateTime: naive(ev.start), timeZone: timezone },
-      end: { dateTime: naive(ev.end), timeZone: timezone },
+      start: { dateTime: zonedParts(ev.start, timezone).dateTime, timeZone: timezone },
+      end: { dateTime: zonedParts(ev.end, timezone).dateTime, timeZone: timezone },
     };
   }
 

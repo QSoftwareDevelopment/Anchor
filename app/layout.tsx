@@ -5,8 +5,8 @@ import CaptureBar from "@/components/capture-bar";
 import CommandPalette from "@/components/command-palette";
 
 export const metadata: Metadata = {
-  title: "Anchor — Q Software",
-  description: "Your AI operating partner.",
+  title: "Anchor OS",
+  description: "Your voice-first executive assistant.",
 };
 
 export const viewport: Viewport = {

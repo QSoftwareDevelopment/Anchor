@@ -18,6 +18,7 @@ export async function GET() {
 
   return NextResponse.json({
     connected: Boolean(data),
+    configured: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REDIRECT_URI),
     calendar_id: data?.calendar_id ?? null,
     connected_at: data?.updated_at ?? null,
   });

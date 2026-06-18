@@ -53,6 +53,13 @@ type TodayEvent = {
 
 const supabase = createBrowserSupabase();
 
+function dayStartISO(key: string) {
+  return new Date(`${key}T00:00:00`).toISOString();
+}
+function dayEndISO(key: string) {
+  return new Date(`${key}T23:59:59`).toISOString();
+}
+
 export default function TodayPage() {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [events, setEvents] = useState<TodayEvent[]>([]);
@@ -90,7 +97,7 @@ export default function TodayPage() {
   }
 
   async function loadEvents() {
-    const res = await fetch(`/api/events?from=${today}T00:00:00&to=${today}T23:59:59`)
+    const res = await fetch(`/api/events?from=${encodeURIComponent(dayStartISO(today))}&to=${encodeURIComponent(dayEndISO(today))}`)
       .then((r) => r.json())
       .catch(() => ({ events: [] }));
     setEvents((res.events as TodayEvent[]) ?? []);
@@ -235,15 +242,17 @@ export default function TodayPage() {
   }
 
   // event handlers
-  function onEventCreated(ev: CreatedEvent) {
+  function onEventCreated(ev: CreatedEvent, synced: boolean) {
     setEvents((es) => [...es, ev as TodayEvent].sort((a, b) => a.start_at.localeCompare(b.start_at)));
-    setNote("Event added.");
+    setNote(syncMessage("added", synced, gcal));
   }
-  function onEventUpdated(ev: CreatedEvent) {
+  function onEventUpdated(ev: CreatedEvent, synced: boolean) {
     setEvents((es) => es.map((e) => (e.id === ev.id ? (ev as TodayEvent) : e)).sort((a, b) => a.start_at.localeCompare(b.start_at)));
+    setNote(syncMessage("updated", synced, gcal));
   }
   function onEventDeleted(id: string) {
     setEvents((es) => es.filter((e) => e.id !== id));
+    setNote("Event deleted.");
   }
   function openNewEvent() {
     setEditingEvent(null);
@@ -535,6 +544,12 @@ function CheckIcon({ animate }: { animate?: boolean }) {
       />
     </svg>
   );
+}
+
+function syncMessage(action: "added" | "updated", synced: boolean, connected: boolean) {
+  if (synced) return `Event ${action} and synced to Google Calendar.`;
+  if (connected) return `Event ${action} in Anchor. Google sync needs attention.`;
+  return `Event ${action} in Anchor. Connect Google Calendar to sync future events.`;
 }
 
 function FullRingCheck() {

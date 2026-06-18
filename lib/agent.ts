@@ -577,6 +577,7 @@ async function dispatchTool(
       let q = supabase
         .from("calendar_events")
         .select("id, title, start_at, end_at, all_day, location")
+        .eq("founder_id", founder.user_id)
         .order("start_at");
       const from = s("from");
       const to = s("to");

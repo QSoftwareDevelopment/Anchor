@@ -1,7 +1,7 @@
 // components/nav.tsx
 // ============================================================
 // NAVIGATION — premium operating-system shell.
-//  Desktop (md+): a fixed 232px glass sidebar with the Q mark,
+//  Desktop (md+): a fixed 232px glass sidebar with the Anchor mark,
 //    grouped, labelled destinations, an animated active indicator,
 //    and sign-out pinned to the bottom.
 //  Mobile: a bottom tab bar of the four primaries + a "More" sheet
@@ -240,11 +240,11 @@ export default function Nav() {
             className="grid h-9 w-9 place-items-center rounded-qa-sm font-mono text-base font-bold text-white"
             style={{ background: "var(--qa-grad)", boxShadow: "var(--qa-glow)" }}
           >
-            Q
+            A
           </span>
           <div className="leading-tight">
-            <p className="text-[15px] font-[650] tracking-tight">Anchor</p>
-            <p className="text-[11px] text-qa-text-3">Operating partner</p>
+            <p className="text-[15px] font-[650] tracking-tight">Anchor OS</p>
+            <p className="text-[11px] text-qa-text-3">Executive assistant</p>
           </div>
         </Link>
 
@@ -256,7 +256,7 @@ export default function Nav() {
             <circle cx="11" cy="11" r="7" />
             <path d="m21 21-4.3-4.3" />
           </svg>
-          <span className="flex-1 text-left">Search…</span>
+          <span className="flex-1 text-left">Command center</span>
           <kbd className="rounded border border-qa-line-strong bg-qa-surface px-1.5 py-0.5 font-mono text-[10px]">⌘K</kbd>
         </button>
 
@@ -278,6 +278,17 @@ export default function Nav() {
             );
           })}
         </nav>
+
+        <div className="mt-3 rounded-qa-sm border border-qa-line bg-qa-glass px-3 py-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-qa-text-3">System</span>
+            <span className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.1em] text-qa-accent">
+              <span className="h-1.5 w-1.5 rounded-full bg-qa-accent shadow-[0_0_10px_rgba(32,245,138,0.8)]" />
+              Online
+            </span>
+          </div>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-qa-text-3">Voice-first workspace, calendar, partner tasks, and decisions.</p>
+        </div>
 
         <Link
           href="/signout"

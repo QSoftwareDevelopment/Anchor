@@ -12,6 +12,11 @@ export async function GET() {
   const supabase = createServerSupabase();
   const founder = await currentFounder(supabase);
   if (!founder) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_REDIRECT_URI) {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    if (appUrl) return NextResponse.redirect(`${appUrl}/plan?gcal=error`);
+    return NextResponse.json({ error: "Google Calendar OAuth is not configured" }, { status: 500 });
+  }
 
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,

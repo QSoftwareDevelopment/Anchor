@@ -182,7 +182,7 @@ export default function CommandPalette() {
       window.dispatchEvent(new CustomEvent("qa:captures-changed"));
       if (pathname.startsWith("/inbox")) router.refresh();
     } catch {
-      flash("Didn't save — try again.");
+      flash("Didn't save. Try again.");
     }
   }
 
@@ -205,7 +205,7 @@ export default function CommandPalette() {
                 value={mode === "capture" ? capture : query}
                 onChange={(e) => (mode === "capture" ? setCapture(e.target.value) : setQuery(e.target.value))}
                 onKeyDown={onInputKey}
-                placeholder={mode === "capture" ? "What's on your mind? Enter to capture…" : "Search commands, jump anywhere…"}
+                placeholder={mode === "capture" ? "Transmit to Anchor. Enter to capture..." : "Command Anchor OS..."}
                 className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-qa-text-3"
               />
               <kbd className="hidden rounded border border-qa-line-strong bg-qa-glass px-1.5 py-0.5 font-mono text-[10px] text-qa-text-3 sm:block">
@@ -259,8 +259,8 @@ export default function CommandPalette() {
 
             <div className="flex items-center justify-between border-t border-qa-line px-4 py-2 text-[11px] text-qa-text-3">
               <span className="flex items-center gap-1.5">
-                <span className="grid h-4 w-4 place-items-center rounded font-mono text-[9px]" style={{ background: "var(--qa-grad)", color: "#fff" }}>Q</span>
-                Anchor
+                <span className="grid h-4 w-4 place-items-center rounded font-mono text-[9px]" style={{ background: "var(--qa-grad)", color: "var(--qa-accent-text)" }}>A</span>
+                Anchor OS
               </span>
               <span className="hidden gap-2 sm:flex">
                 <span>↑↓ navigate</span><span>↵ select</span><span>esc close</span>

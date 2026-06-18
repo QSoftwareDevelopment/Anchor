@@ -36,6 +36,15 @@ const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 function isoDate(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+function dayStartISO(key: string) {
+  return new Date(`${key}T00:00:00`).toISOString();
+}
+function dayEndISO(key: string) {
+  return new Date(`${key}T23:59:59`).toISOString();
+}
+function eventDayKey(ev: Pick<Ev, "start_at" | "all_day">) {
+  return ev.all_day ? ev.start_at.slice(0, 10) : isoDate(new Date(ev.start_at));
+}
 
 export default function WeekPage() {
   const [monday, setMonday] = useState<string>(() => mondayOf(new Date()));
@@ -75,7 +84,7 @@ export default function WeekPage() {
           .gte("block_date", monday)
           .lte("block_date", weekEnd)
           .order("start_at"),
-        fetch(`/api/events?from=${monday}T00:00:00&to=${weekEnd}T23:59:59`).then((r) => r.json()).catch(() => ({ events: [] })),
+        fetch(`/api/events?from=${encodeURIComponent(dayStartISO(monday))}&to=${encodeURIComponent(dayEndISO(weekEnd))}`).then((r) => r.json()).catch(() => ({ events: [] })),
       ]);
       setBlocks((blk as unknown as Block[]) ?? []);
       setEvents((evRes.events as Ev[]) ?? []);
@@ -132,9 +141,9 @@ export default function WeekPage() {
     setEvents((es) => [...es, ev as Ev].sort((a, b) => a.start_at.localeCompare(b.start_at)));
     setNote(synced ? "Event added and synced to Google Calendar." : "Event added.");
   }
-  function onUpdated(ev: CreatedEvent) {
+  function onUpdated(ev: CreatedEvent, synced: boolean) {
     setEvents((es) => es.map((e) => (e.id === ev.id ? (ev as Ev) : e)).sort((a, b) => a.start_at.localeCompare(b.start_at)));
-    setNote("Event updated.");
+    setNote(syncMessage("updated", synced, gcal));
   }
   function onDeleted(id: string) {
     setEvents((es) => es.filter((e) => e.id !== id));
@@ -203,7 +212,7 @@ export default function WeekPage() {
             const key = isoDate(day);
             const isToday = key === todayKey;
             const dayBlocks = blocks.filter((b) => b.block_date === key);
-            const dayEvents = events.filter((e) => e.start_at.slice(0, 10) === key);
+            const dayEvents = events.filter((e) => eventDayKey(e) === key);
             const items = [
               ...dayEvents.map((e) => ({ kind: "event" as const, sort: e.start_at, e })),
               ...dayBlocks.map((b) => ({ kind: "block" as const, sort: b.start_at, b })),
@@ -285,4 +294,10 @@ function Chevron({ dir }: { dir: "left" | "right" }) {
       {dir === "left" ? <path d="M15 18l-6-6 6-6" /> : <path d="M9 18l6-6-6-6" />}
     </svg>
   );
+}
+
+function syncMessage(action: "updated", synced: boolean, connected: boolean) {
+  if (synced) return `Event ${action} and synced to Google Calendar.`;
+  if (connected) return `Event ${action} in Anchor. Google sync needs attention.`;
+  return `Event ${action} in Anchor. Connect Google Calendar to sync future events.`;
 }

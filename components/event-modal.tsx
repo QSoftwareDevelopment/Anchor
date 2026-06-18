@@ -16,6 +16,7 @@ export type CreatedEvent = {
   location: string | null;
   notes: string | null;
   category?: string;
+  gcal_event_id?: string | null;
 };
 
 const CATEGORIES = ["event", "meeting", "call", "personal", "deep"];
@@ -27,6 +28,9 @@ function localParts(iso: string) {
     date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
     time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
   };
+}
+function localInstant(date: string, time: string) {
+  return new Date(`${date}T${time}:00`).toISOString();
 }
 
 export default function EventModal({
@@ -42,7 +46,7 @@ export default function EventModal({
   open: boolean;
   onClose: () => void;
   onCreated?: (e: CreatedEvent, synced: boolean) => void;
-  onUpdated?: (e: CreatedEvent) => void;
+  onUpdated?: (e: CreatedEvent, synced: boolean) => void;
   onDeleted?: (id: string) => void;
   defaultDate?: string; // YYYY-MM-DD
   event?: CreatedEvent | null; // when set, the modal edits this event
@@ -66,8 +70,8 @@ export default function EventModal({
     if (!open) return;
     setError(null);
     if (event) {
-      const s = localParts(event.start_at);
-      const e = localParts(event.end_at);
+      const s = event.all_day ? { date: event.start_at.slice(0, 10), time: "09:00" } : localParts(event.start_at);
+      const e = event.all_day ? { date: event.end_at.slice(0, 10), time: "10:00" } : localParts(event.end_at);
       setTitle(event.title);
       setDate(s.date);
       setStart(s.time);
@@ -108,8 +112,18 @@ export default function EventModal({
     setBusy(true);
     setError(null);
 
-    const start_at = allDay ? `${date}T00:00:00` : `${date}T${start}:00`;
-    const end_at = allDay ? `${date}T23:59:59` : `${date}T${end}:00`;
+    let start_at = `${date}T00:00:00.000Z`;
+    let end_at = `${date}T23:59:59.000Z`;
+    if (!allDay) {
+      const startMs = new Date(`${date}T${start}:00`).getTime();
+      const endMs = new Date(`${date}T${end}:00`).getTime();
+      if (endMs <= startMs) {
+        setError("End time must be after start time.");
+        return;
+      }
+      start_at = localInstant(date, start);
+      end_at = localInstant(date, end);
+    }
     const payload = {
       title: title.trim(),
       start_at,
@@ -129,7 +143,7 @@ export default function EventModal({
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error ?? "failed");
-        onUpdated?.({ ...event, ...payload });
+        onUpdated?.(data.event ?? { ...event, ...payload }, Boolean(data.synced));
       } else {
         const res = await fetch("/api/events", {
           method: "POST",

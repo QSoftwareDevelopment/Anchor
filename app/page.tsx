@@ -11,6 +11,8 @@ export const dynamic = "force-dynamic";
 
 const fmtTime = (iso: string) =>
   new Date(iso).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit" });
+const fmtEventDate = (iso: string, allDay: boolean) =>
+  new Date(allDay ? `${iso.slice(0, 10)}T00:00:00` : iso).toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric" });
 
 type Blk = { start_at: string; tasks: { title: string; is_anchor: boolean; status: string } | null };
 const normBlocks = (rows: { start_at: string; tasks: unknown }[] | null) =>
@@ -38,6 +40,7 @@ export default async function Home() {
     { count: partnerShipped },
     { data: events },
     { count: atRisk },
+    { data: gcal },
   ] = await Promise.all([
     supabase.from("schedule_blocks").select("start_at, end_at, tasks(title, is_anchor, status)").eq("founder_id", founder.user_id).eq("block_date", today).order("start_at"),
     supabase.from("tasks").select("id", { count: "exact", head: true }).eq("owner", founder.user_id).eq("status", "done").gte("completed_at", `${monday}T00:00:00`),
@@ -48,8 +51,9 @@ export default async function Home() {
     partner
       ? supabase.from("tasks").select("id", { count: "exact", head: true }).eq("owner", partner.user_id).eq("status", "done").gte("completed_at", `${monday}T00:00:00`)
       : Promise.resolve({ count: 0 }),
-    supabase.from("calendar_events").select("title, start_at, all_day").gte("start_at", nowISO).order("start_at").limit(3),
+    supabase.from("calendar_events").select("title, start_at, all_day").eq("founder_id", founder.user_id).gte("start_at", nowISO).order("start_at").limit(3),
     supabase.from("tasks").select("id", { count: "exact", head: true }).eq("owner", founder.user_id).gte("slip_count", 2).in("status", ["planned", "scheduled"]),
+    supabase.from("gcal_tokens").select("user_id").eq("user_id", founder.user_id).maybeSingle(),
   ]);
 
   const list = normBlocks(blocks as { start_at: string; tasks: unknown }[]).map((blk) => ({
@@ -75,7 +79,7 @@ export default async function Home() {
   const upcoming = ((events as { title: string; start_at: string; all_day: boolean }[]) ?? []).map((e) => ({
     title: e.title,
     when: e.all_day ? "all day" : fmtTime(e.start_at),
-    date: new Date(e.start_at).toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric" }),
+    date: fmtEventDate(e.start_at, e.all_day),
   }));
 
   const glance: Glance = {
@@ -86,6 +90,7 @@ export default async function Home() {
     atRisk: atRisk ?? 0,
     partner: partnerGlance,
     upcoming,
+    calendarConnected: Boolean(gcal),
   };
 
   return <AssistantHome founderName={founder.display_name} initialGlance={glance} />;
